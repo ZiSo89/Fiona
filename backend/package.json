@@ -1,0 +1,21 @@
+{
+  "name": "fiona-pwa-backend",
+  "version": "1.0.0",
+  "description": "Polling backend for Fiona service tickets",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test",
+    "sync:closed": "node src/cli/syncClosedTickets.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "better-sqlite3": "^11.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.1",
+    "express": "^4.19.2",
+    "fiona-mobile-ops": "file:.."
+  }
+}
