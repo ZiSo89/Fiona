@@ -8,3 +8,4 @@ frontend/dist/
 project-tracker/dist/
 .DS_Store
 npm-debug.log*
+.playwright-mcp/
