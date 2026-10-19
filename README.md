@@ -84,6 +84,7 @@ npm --prefix backend test
 
    ```powershell
    npm run build:frontend
+   npm run build:tracker
    npm run start:backend
    ```
 

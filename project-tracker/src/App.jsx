@@ -67,6 +67,19 @@ function profileKey(profile) {
   return `${profile.storeId}::${profile.teamName}`;
 }
 
+function readTrackerView() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('project-tracker-view') || '{}');
+    return {
+      profileKey: typeof saved.profileKey === 'string' ? saved.profileKey : '',
+      month: /^\d{4}-\d{2}$/.test(saved.month) ? saved.month : '',
+      date: /^\d{4}-\d{2}-\d{2}$/.test(saved.date) ? saved.date : '',
+    };
+  } catch {
+    return { profileKey: '', month: '', date: '' };
+  }
+}
+
 function currentAthensDate() {
   const parts = Object.fromEntries(dayFormatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
@@ -134,10 +147,11 @@ async function trackerRequest(path, options = {}) {
 
 function App() {
   const today = currentAthensDate();
+  const [savedView] = useState(readTrackerView);
   const [profiles, setProfiles] = useState([]);
-  const [selectedProfileKey, setSelectedProfileKey] = useState('');
-  const [month, setMonth] = useState(currentAthensMonth());
-  const [selectedDate, setSelectedDate] = useState(today);
+  const [selectedProfileKey, setSelectedProfileKey] = useState(savedView.profileKey);
+  const [month, setMonth] = useState(savedView.month || currentAthensMonth());
+  const [selectedDate, setSelectedDate] = useState(savedView.date || today);
   const [monthData, setMonthData] = useState(null);
   const [dayJobs, setDayJobs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -200,14 +214,24 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!profiles.length) {
-      setSelectedProfileKey('');
-      return;
-    }
+    if (!profiles.length) return;
     if (!profiles.some((profile) => profileKey(profile) === selectedProfileKey)) {
       setSelectedProfileKey(profileKey(profiles[0]));
     }
   }, [profiles, selectedProfileKey]);
+
+  useEffect(() => {
+    if (!selectedProfile) return;
+    try {
+      localStorage.setItem('project-tracker-view', JSON.stringify({
+        profileKey: selectedKey,
+        month,
+        date: selectedDate,
+      }));
+    } catch {
+      // Local storage may be disabled; the current view still works.
+    }
+  }, [selectedKey, month, selectedDate]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
