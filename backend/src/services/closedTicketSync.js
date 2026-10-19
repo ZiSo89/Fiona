@@ -46,6 +46,7 @@ export async function syncClosedTickets({
   fromDate,
   toDate,
   refreshExisting = false,
+  serviceGroupMatch = null,
   serviceGroups = config.closedTicketServiceGroups,
   minDelayMs = config.fionaRequestMinDelayMs,
   maxDelayMs = config.fionaRequestMaxDelayMs,
@@ -62,6 +63,7 @@ export async function syncClosedTickets({
     alreadyPresent: 0,
     duplicateInRange: 0,
     notCompleted: 0,
+    otherStore: 0,
     missingCompletionTime: 0,
     failed: 0,
     failures: [],
@@ -118,6 +120,16 @@ export async function syncClosedTickets({
         summary.failures.push({ orderId, stage: 'order_details', status: error?.status ?? null });
         onProgress(`${dateProgress}: order ${orderId} details failed${error?.status ? ` (HTTP ${error.status})` : ''}.`);
         continue;
+      }
+
+      // All stores share one Fiona service group ID; only the group name in the order details identifies the store.
+      if (serviceGroupMatch) {
+        const orderGroup = String(findOrderField(details, 'serviceGroup') ?? order?.serviceGroup ?? '').toUpperCase();
+        if (!orderGroup.includes(String(serviceGroupMatch).toUpperCase())) {
+          summary.otherStore += 1;
+          onProgress(`${dateProgress}: order ${orderId} belongs to another store; skipped.`);
+          continue;
+        }
       }
 
       const preliminaryRecord = buildClosedTicketRecord(order, details, {}, null, now());

@@ -50,6 +50,20 @@ test('normalizeOrders creates the technician-facing structure', () => {
   assert.equal(result.tickets[0].customer.fullAddress.includes('ΑΓΙΟΥ ΔΗΜΗΤΡΙΟΥ'), true);
 });
 
+test('removes Komotini and Orestiada municipality prefixes from addresses and map queries', () => {
+  const tickets = normalizeOrders({
+    FilteredOrders: [
+      { id: 'komotini', street: 'ΟΔΟΣ ΕΙΡΗΝΗΣ', houseNumber: '12', city: 'Δ. ΚΟΜΟΤΗΝΗΣ', region: '69100' },
+      { id: 'orestiada', street: 'ΚΩΝΣΤΑΝΤΙΝΟΥΠΟΛΕΩΣ', houseNumber: '8', city: 'Δ. ΟΡΕΣΤΙΑΔΟΣ', region: '68200' },
+    ],
+  }).tickets;
+
+  assert.equal(tickets[0].customer.fullAddress, 'ΟΔΟΣ ΕΙΡΗΝΗΣ 12, 69100');
+  assert.equal(decodeURIComponent(tickets[0].location.mapsUrl).includes('ΚΟΜΟΤΗΝΗΣ'), false);
+  assert.equal(tickets[1].customer.fullAddress, 'ΚΩΝΣΤΑΝΤΙΝΟΥΠΟΛΕΩΣ 8, 68200');
+  assert.equal(decodeURIComponent(tickets[1].location.mapsUrl).includes('ΟΡΕΣΤΙΑΔΟΣ'), false);
+});
+
 test('uses the work-order SLA separately from the activity deadline', () => {
   const result = normalizeOrders({
     FilteredOrders: [{

@@ -43,6 +43,25 @@ test('reports a first call made after the call deadline as late', () => {
   }
 });
 
+test('keeps observations for matching order IDs isolated by store', () => {
+  const repository = createTicketObservationRepository(':memory:', null);
+  try {
+    repository.record([{
+      ...ticket('CALL LATER', '2026-10-14T10:00:00.000Z', '2026-10-14T09:00:00.000Z'),
+      storeId: 'alexandroupoli',
+    }]);
+    repository.record([{
+      ...ticket('APPOINTMENT', '2026-10-14T08:00:00.000Z', '2026-10-14T09:00:00.000Z'),
+      storeId: 'komotini',
+    }]);
+
+    assert.equal(repository.firstCall('100', 'alexandroupoli').outcome, 'late');
+    assert.equal(repository.firstCall('100', 'komotini').outcome, 'on_time');
+  } finally {
+    repository.close();
+  }
+});
+
 test('polling passes live tickets to the observer and survives observer failures', async () => {
   const seen = [];
   const service = createPollingService({

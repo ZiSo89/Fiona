@@ -5,7 +5,9 @@
   "scripts": {
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev -- --host 0.0.0.0 --port 5173",
+    "dev:tracker": "npm --prefix project-tracker run dev",
     "build:frontend": "npm --prefix frontend run build",
+    "build:tracker": "npm --prefix project-tracker run build",
     "start:backend": "npm --prefix backend run start"
   }
 }

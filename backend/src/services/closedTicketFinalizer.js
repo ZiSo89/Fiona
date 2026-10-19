@@ -59,6 +59,7 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
         if (!orderId) continue;
         openOrderIds.add(orderId);
         rows.push({
+          store_id: ticket?.storeId || undefined,
           order_id: orderId,
           service_order_id: ticket?.serviceOrderId ? String(ticket.serviceOrderId) : null,
           team_name: ticket?.dispatch?.assignedTeam || null,

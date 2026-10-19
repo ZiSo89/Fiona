@@ -46,3 +46,16 @@ test('failed refresh retains the last successful tickets as stale data', async (
   assert.equal(staleSnapshot.tickets[0].id, 'SO-1');
   assert.equal(staleSnapshot.error, 'Fiona unavailable');
 });
+
+test('polling snapshots attach store identity to every ticket', async () => {
+  const service = createPollingService({
+    fetchOrders: async () => ({ FilteredOrders: [{ id: 'SO-1', orderStatus: 'OPEN' }] }),
+  }, 60000, () => {}, { storeId: 'komotini', storeName: 'Κομοτηνή' });
+
+  const snapshot = await service.refreshTickets();
+
+  assert.equal(snapshot.storeId, 'komotini');
+  assert.equal(snapshot.storeName, 'Κομοτηνή');
+  assert.equal(snapshot.tickets[0].storeId, 'komotini');
+  assert.equal(snapshot.tickets[0].storeName, 'Κομοτηνή');
+});

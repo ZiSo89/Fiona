@@ -1,0 +1,159 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createProjectTrackerRepository } from '../src/services/projectTrackerRepository.js';
+import { syncProjectTracker } from '../src/services/projectTrackerSync.js';
+
+async function withRepository(run) {
+  const repository = createProjectTrackerRepository(':memory:');
+  try {
+    return await run(repository);
+  } finally {
+    repository.close();
+  }
+}
+
+const store = {
+  storeId: 'alexandroupoli',
+  closedServiceGroups: ['395'],
+  closedServiceGroupMatch: 'ALEXANDROUPOL',
+};
+
+test('imports only Fiona-completed jobs after cutover and deduplicates repeat syncs', async () => {
+  await withRepository(async (repository) => {
+    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    const calls = [];
+    const client = {
+      async dailyWorkorders(date, groups) {
+        calls.push(['daily', date, groups]);
+        return [{ orderId: 'fiona-1', teamName: 'Install Team', orderType: 'FTTH Installation' }];
+      },
+      async orderDetails(orderId) {
+        calls.push(['details', orderId]);
+        return {
+          orderId,
+          orderStatus: 'COMPLETED',
+          workOrderFinishedOnPremiseTime: '2026-10-18T10:00:00.000Z',
+          serviceGroup: 'ALEXANDROUPOLI 395',
+          orderType: 'FTTH Installation',
+        };
+      },
+    };
+    const options = {
+      stores: [store],
+      clients: new Map([['alexandroupoli', client]]),
+      repository,
+      lookbackDays: 1,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      wait: async () => {},
+      now: () => new Date('2026-10-18T12:00:00.000Z'),
+    };
+
+    const first = await syncProjectTracker(options);
+    const second = await syncProjectTracker(options);
+    assert.equal(first.inserted, 1);
+    assert.equal(second.alreadyPresent, 1);
+    assert.equal(repository.getMonthJobs('2026-10')[0].teamName, 'Install Team');
+    assert.equal(repository.getMonthJobs('2026-10')[0].points, 50);
+    assert.deepEqual(calls[0], ['daily', '18.10.2026', ['395']]);
+    assert.equal(calls.filter(([kind]) => kind === 'details').length, 1);
+  });
+});
+
+test('does not import pre-cutover, incomplete, unassigned, or other-store work', async () => {
+  await withRepository(async (repository) => {
+    repository.ensureCutoverAt(new Date('2026-10-18T12:00:00.000Z'));
+    const orders = [
+      { orderId: 'old', teamName: 'Team One' },
+      { orderId: 'open', teamName: 'Team One' },
+      { orderId: 'no-team' },
+      { orderId: 'other', teamName: 'Team One' },
+    ];
+    const details = {
+      old: { orderStatus: 'COMPLETED', workOrderFinishedOnPremiseTime: '2026-10-18T09:00:00.000Z', serviceGroup: 'ALEXANDROUPOLI' },
+      open: { orderStatus: 'OPEN', workOrderFinishedOnPremiseTime: '2026-10-18T13:00:00.000Z', serviceGroup: 'ALEXANDROUPOLI' },
+      'no-team': { orderStatus: 'COMPLETED', workOrderFinishedOnPremiseTime: '2026-10-18T13:00:00.000Z', serviceGroup: 'ALEXANDROUPOLI' },
+      other: { orderStatus: 'COMPLETED', workOrderFinishedOnPremiseTime: '2026-10-18T13:00:00.000Z', serviceGroup: 'KOMOTINI' },
+    };
+    const client = {
+      async dailyWorkorders() { return orders; },
+      async orderDetails(orderId) { return { ...details[orderId], orderType: 'Unmapped service' }; },
+    };
+    const summary = await syncProjectTracker({
+      stores: [store],
+      clients: new Map([['alexandroupoli', client]]),
+      repository,
+      lookbackDays: 1,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      wait: async () => {},
+      now: () => new Date('2026-10-18T12:00:00.000Z'),
+    });
+    assert.equal(summary.beforeCutover, 1);
+    assert.equal(summary.notCompleted, 1);
+    assert.equal(summary.missingTeam, 1);
+    assert.equal(summary.otherStore, 1);
+    assert.equal(repository.getMonthJobs('2026-10').length, 0);
+  });
+});
+
+test('maps verified Fiona category values exactly and leaves unknown values unmapped', async () => {
+  await withRepository(async (repository) => {
+    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    const client = {
+      async dailyWorkorders() {
+        return [
+          { orderId: 'mapped', teamName: 'Team One', orderType: 'FIBER FIELD JOB' },
+          { orderId: 'unmapped', teamName: 'Team One', orderType: 'Unknown service' },
+        ];
+      },
+      async orderDetails(orderId) {
+        return {
+          orderId,
+          orderStatus: 'COMPLETED',
+          workOrderFinishedOnPremiseTime: '2026-10-18T10:00:00.000Z',
+          serviceGroup: 'ALEXANDROUPOLI 395',
+        };
+      },
+    };
+    await syncProjectTracker({
+      stores: [store],
+      clients: new Map([['alexandroupoli', client]]),
+      repository,
+      categoryMap: { 'FIBER FIELD JOB': 'ftth_installation' },
+      lookbackDays: 1,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      wait: async () => {},
+      now: () => new Date('2026-10-18T12:00:00.000Z'),
+    });
+    assert.equal(repository.getJob('alexandroupoli', 'mapped').categoryId, 'ftth_installation');
+    assert.equal(repository.getJob('alexandroupoli', 'unmapped').mapped, false);
+  });
+});
+
+test('sync applies new exact mappings to existing pending rows before polling', async () => {
+  await withRepository(async (repository) => {
+    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    repository.insertJob({
+      storeId: 'alexandroupoli',
+      orderId: 'existing-nga',
+      teamName: 'Team One',
+      closedAt: '2026-10-18T10:00:00.000Z',
+      sourceLabel: 'Installations',
+      sourceCategoryId: 'PaSPort|INSTALLATION|NGA Activation|Syzefxis N|Appointment',
+      categoryId: null,
+      importedAt: '2026-10-18T11:00:00.000Z',
+    });
+    const summary = await syncProjectTracker({
+      stores: [],
+      clients: new Map(),
+      repository,
+      categoryMap: { 'NGA Activation': 'ftth_installation' },
+      lookbackDays: 1,
+      now: () => new Date('2026-10-19T12:00:00.000Z'),
+    });
+    assert.equal(summary.remappedExisting, 1);
+    assert.equal(repository.getJob('alexandroupoli', 'existing-nga').points, 50);
+  });
+});

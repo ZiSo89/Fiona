@@ -187,7 +187,7 @@ function buildAddress(order) {
 function cleanAddressPart(value) {
   return String(value ?? '')
     .replace(/\(?\s*ΠΡΧ\s+ΚΕΝΤΡΟ\s+ΑΛΕΞΑΝΔΡΟΥΠΟΛΗΣ\s*\)?/gi, '')
-    .replace(/(?:Δ\.|Δ\s+|ΔΗΜΟΣ\s+)\s*ΑΛΕΞΑΝΔΡΟΥΠΟΛΗΣ/gi, '')
+    .replace(/(?:Δ\.|Δ\s+|ΔΗΜΟΣ\s+)\s*(?:ΑΛΕΞΑΝΔΡΟΥΠΟΛΗΣ|ΚΟΜΟΤΗΝΗΣ|ΟΡΕΣΤΙΑΔΟΣ)/gi, '')
     .replace(/\s+/g, ' ')
     .trim();
 }

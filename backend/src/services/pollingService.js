@@ -1,11 +1,13 @@
-import { fionaClient } from './fionaClient.js';
+import { FionaClient } from './fionaClient.js';
 import { normalizeOrders } from './orderNormalizer.js';
 import { config } from '../config.js';
 import { createTicketObservationRepository } from './ticketObservationRepository.js';
 import { createClosedTicketRepository } from './closedTicketRepository.js';
 import { createClosedTicketFinalizer } from './closedTicketFinalizer.js';
 
-export function createPollingService(client, pollIntervalMs, onTickets = () => {}) {
+export function createPollingService(client, pollIntervalMs, onTickets = () => {}, store = client.config || {}) {
+  const storeId = store.storeId || 'alexandroupoli';
+  const storeName = store.storeName || 'Αλεξανδρούπολη';
   const state = {
     tickets: [],
     lastUpdatedAt: null,
@@ -18,6 +20,8 @@ export function createPollingService(client, pollIntervalMs, onTickets = () => {
 
   function getLatestSnapshot() {
     return {
+      storeId,
+      storeName,
       status: state.status,
       lastUpdatedAt: state.lastUpdatedAt,
       lastAttemptAt: state.lastAttemptAt,
@@ -36,14 +40,15 @@ export function createPollingService(client, pollIntervalMs, onTickets = () => {
       try {
         const payload = await client.fetchOrders();
         const normalized = normalizeOrders(payload);
+        const tickets = normalized.tickets.map((ticket) => ({ ...ticket, storeId, storeName }));
 
-        state.tickets = normalized.tickets;
+        state.tickets = tickets;
         state.lastUpdatedAt = new Date().toISOString();
         state.error = null;
         state.status = 'live';
 
         try {
-          const pending = onTickets(normalized.tickets, new Date());
+          const pending = onTickets(tickets, new Date());
           Promise.resolve(pending).catch((observationError) => {
             console.error('Ticket observation failed:', observationError?.message);
           });
@@ -82,18 +87,42 @@ export function createPollingService(client, pollIntervalMs, onTickets = () => {
   return { getLatestSnapshot, refreshTickets, startPolling, stopPolling };
 }
 
-let observations;
-let finalizer;
-const recordObservations = (tickets, observedAt) => {
-  observations ??= createTicketObservationRepository();
-  observations.record(tickets, observedAt);
-  finalizer ??= createClosedTicketFinalizer({ client: fionaClient, repository: createClosedTicketRepository() });
-  return finalizer.process(tickets);
-};
+const fionaClients = new Map();
 
-const pollingService = createPollingService(fionaClient, config.pollIntervalMs, recordObservations);
+function createStorePollingService(store) {
+  const client = new FionaClient(store);
+  fionaClients.set(store.storeId, client);
+  const observations = createTicketObservationRepository(config.closedTicketsDbPath, store.storeId);
+  const repository = createClosedTicketRepository(config.closedTicketsDbPath, store.storeId);
+  const finalizer = createClosedTicketFinalizer({ client, repository });
+  const recordObservations = (tickets, observedAt) => {
+    observations.record(tickets, observedAt);
+    return finalizer.process(tickets);
+  };
+  return createPollingService(client, config.pollIntervalMs, recordObservations, store);
+}
 
-export const getLatestSnapshot = () => pollingService.getLatestSnapshot();
-export const refreshTickets = () => pollingService.refreshTickets();
-export const startPolling = () => pollingService.startPolling();
-export const stopPolling = () => pollingService.stopPolling();
+const configuredStores = config.fionaStores.filter((store) => store.configured);
+const pollingServices = new Map(configuredStores.map((store) => [store.storeId, createStorePollingService(store)]));
+const defaultStoreId = configuredStores.find((store) => store.storeId === 'alexandroupoli')?.storeId
+  || configuredStores[0]?.storeId;
+
+function getPollingService(storeId = defaultStoreId) {
+  const service = pollingServices.get(storeId);
+  if (!service) {
+    const error = new Error(`Fiona store is not configured: ${storeId || 'none'}`);
+    error.status = 404;
+    throw error;
+  }
+  return service;
+}
+
+export const getConfiguredStores = () => configuredStores.map(({ storeId, storeName }) => ({ storeId, storeName }));
+export const getStores = () => config.fionaStores.map(({ storeId, storeName, configured }) => ({ storeId, storeName, configured }));
+export const getFionaClient = (storeId) => fionaClients.get(storeId) ?? null;
+export const getLatestSnapshot = (storeId) => getPollingService(storeId).getLatestSnapshot();
+export const refreshTickets = (storeId) => getPollingService(storeId).refreshTickets();
+export const getAllLatestSnapshots = () => configuredStores.map((store) => getPollingService(store.storeId).getLatestSnapshot());
+export const refreshAllTickets = async () => Promise.all(configuredStores.map((store) => refreshTickets(store.storeId)));
+export const startPolling = () => pollingServices.forEach((service) => service.startPolling());
+export const stopPolling = () => pollingServices.forEach((service) => service.stopPolling());

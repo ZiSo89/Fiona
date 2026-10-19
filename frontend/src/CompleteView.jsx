@@ -71,7 +71,7 @@ async function copyText(value) {
   }
 }
 
-function TicketDetails({ orderId }) {
+function TicketDetails({ orderId, storeId }) {
   const [ticket, setTicket] = useState(null);
   const [error, setError] = useState(false);
   const [note, setNote] = useState('');
@@ -80,12 +80,12 @@ function TicketDetails({ orderId }) {
 
   useEffect(() => {
     const controller = new AbortController();
-    fetch(`/api/closed-tickets/${encodeURIComponent(orderId)}`, { signal: controller.signal })
+    fetch(`/api/closed-tickets/${encodeURIComponent(orderId)}?store=${encodeURIComponent(storeId)}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status))))
       .then((result) => setTicket(result.ticket))
       .catch((reason) => { if (reason.name !== 'AbortError') setError(true); });
     return () => controller.abort();
-  }, [orderId]);
+  }, [orderId, storeId]);
 
   if (error) return <p className="empty-state">Δεν φορτώθηκαν τα στοιχεία.</p>;
   if (!ticket) return <div className="detail-panel" aria-busy="true"><div className="skeleton-kpi detail-skeleton" /></div>;
@@ -157,7 +157,7 @@ function TicketDetails({ orderId }) {
   );
 }
 
-function ClosedItem({ ticket }) {
+function ClosedItem({ ticket, storeName }) {
   const [open, setOpen] = useState(false);
   const kind = ticket.outcome === 'on_time' ? 'good' : ticket.outcome === 'late' ? 'bad' : 'none';
 
@@ -166,18 +166,19 @@ function ClosedItem({ ticket }) {
       <button type="button" className={`done-card done-${kind}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
         <div>
           <strong>{ticket.customer || `#${ticket.serviceOrderId}`}</strong>
+          <span className="closed-store-label">{storeName}</span>
           {ticket.address && <span>{ticket.address}</span>}
           <span>#{ticket.serviceOrderId} • {ticket.service} • {ticket.team}</span>
           <small>Έκλεισε {formatClosed(ticket.closedAt)}</small>
         </div>
         <b>{kind === 'good' ? 'Εντός ορίου' : kind === 'bad' ? formatLate(ticket.hoursLate) : 'Χωρίς προθεσμία'}</b>
       </button>
-      {open && <TicketDetails orderId={ticket.orderId} />}
+      {open && <TicketDetails orderId={ticket.orderId} storeId={ticket.storeId} />}
     </div>
   );
 }
 
-function ClosedList({ tickets }) {
+function ClosedList({ tickets, stores }) {
   const [query, setQuery] = useState('');
   const needle = query.trim().toLocaleLowerCase();
   const visible = needle
@@ -189,12 +190,16 @@ function ClosedList({ tickets }) {
     <section className="stats-section">
       <input className="list-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Αναζήτηση πελάτη, διεύθυνσης ή εισιτηρίου" aria-label="Αναζήτηση ολοκληρωμένων" />
       {visible.length === 0 && <p className="empty-state">Δεν βρέθηκαν εργασίες.</p>}
-      {visible.map((ticket) => <ClosedItem key={ticket.orderId} ticket={ticket} />)}
+      {visible.map((ticket) => <ClosedItem
+        key={`${ticket.storeId}:${ticket.orderId}`}
+        ticket={ticket}
+        storeName={stores.find((store) => store.storeId === ticket.storeId)?.storeName || ticket.storeId}
+      />)}
     </section>
   );
 }
 
-function StatsSections({ stats }) {
+function StatsSections({ stats, stores }) {
   const workPercent = stats.totals.onTimePercent;
   const callPercent = stats.firstCall.onTimePercent;
   const callJudged = stats.firstCall.onTime + stats.firstCall.late;
@@ -211,8 +216,8 @@ function StatsSections({ stats }) {
       <section className="stats-section">
         <h3>Ανά συνεργείο</h3>
         {stats.teams.map((team) => (
-          <div key={team.team} className="team-row">
-            <div className="team-row-head"><strong>{team.team}</strong><span className={`pct pct-${tone(team.onTimePercent)}`}>{team.onTimePercent === null ? '—' : `${team.onTimePercent}%`}</span></div>
+          <div key={`${team.storeId}:${team.team}`} className="team-row">
+            <div className="team-row-head"><strong>{team.team} · {stores.find((store) => store.storeId === team.storeId)?.storeName || team.storeId}</strong><span className={`pct pct-${tone(team.onTimePercent)}`}>{team.onTimePercent === null ? '—' : `${team.onTimePercent}%`}</span></div>
             <div className="stack-bar" role="img" aria-label={`${team.onTime} εντός, ${team.late} εκτός, ${team.unknown} άγνωστα`}>
               <span className="seg-good" style={{ flexGrow: team.onTime }} />
               <span className="seg-bad" style={{ flexGrow: team.late }} />
@@ -227,7 +232,7 @@ function StatsSections({ stats }) {
   );
 }
 
-export default function CompleteView() {
+export default function CompleteView({ storeId, stores }) {
   const [month, setMonth] = useState(readCompleteMonth);
   const [section, setSection] = useState(readCompleteSection);
   const [stats, setStats] = useState(null);
@@ -245,12 +250,12 @@ export default function CompleteView() {
     const controller = new AbortController();
     setStats(null);
     setError(false);
-    fetch(`/api/closed-tickets/stats?month=${month}`, { signal: controller.signal })
+    fetch(`/api/closed-tickets/stats?month=${month}&store=${encodeURIComponent(storeId)}`, { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status))))
       .then(setStats)
       .catch((reason) => { if (reason.name !== 'AbortError') setError(true); });
     return () => controller.abort();
-  }, [month]);
+  }, [month, storeId]);
 
   const isCurrent = month >= currentMonth();
 
@@ -270,7 +275,9 @@ export default function CompleteView() {
       {error && <p className="empty-state">Δεν φορτώθηκαν τα δεδομένα. Ελέγξτε ότι το backend τρέχει.</p>}
       {!stats && !error && <div className="kpi-grid" aria-busy="true">{[0, 1, 2, 3].map((slot) => <div key={slot} className="kpi skeleton-kpi" />)}</div>}
       {stats && stats.totals.total === 0 && <p className="empty-state">Δεν υπάρχουν κλεισμένες εργασίες αυτόν τον μήνα.</p>}
-      {stats && stats.totals.total > 0 && (section === 'list' ? <ClosedList tickets={stats.closedTickets} /> : <StatsSections stats={stats} />)}
+      {stats && stats.totals.total > 0 && (section === 'list'
+        ? <ClosedList tickets={stats.closedTickets} stores={stores} />
+        : <StatsSections stats={stats} stores={stores} />)}
     </main>
   );
 }

@@ -630,7 +630,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   .filter-chip.active { color: #fff; }
   .address-row, .latest-comment, .next-action strong, .team-assignment strong { color: #1e293b; }
 }
-.team-select { width: 100%; min-height: 40px; margin-top: 8px; padding: 0 10px; border: 1px solid var(--line); border-radius: 10px; background: #161f36; color: #cbd5e1; font-size: 0.8rem; }
+.team-select, .store-select { width: 100%; min-height: 40px; margin-top: 8px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: #161f36; color: #cbd5e1; font-size: 0.8rem; }
+.store-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border: 1px solid rgba(2, 132, 199, 0.35); border-radius: 6px; background: rgba(2, 132, 199, 0.12); color: #7dd3fc; font-size: 0.68rem; font-weight: 650; }
 
 /* Stitch redesign: neutral palette, slim SLA row, outlined actions, collapsible details */
 :root {
@@ -729,6 +730,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .done-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; border: 1px solid var(--line); border-left: 3px solid var(--details); border-radius: 12px; background: var(--surface); }
 .done-card > div { display: grid; gap: 2px; min-width: 0; }
 .done-card strong { color: var(--text); font-size: 0.82rem; }
+.done-card .closed-store-label { color: var(--muted); font-size: 0.65rem; line-height: 1.1; }
 .done-card span { color: var(--muted); font-size: 0.72rem; }
 .done-card small { color: var(--details); font-size: 0.68rem; }
 .done-card b { flex: 0 0 auto; font-size: 0.78rem; color: var(--muted); }
@@ -759,6 +761,17 @@ button.done-card { width: 100%; text-align: left; font: inherit; cursor: pointer
 .login-card button { min-height: 44px; border: 0; border-radius: 10px; background: var(--blue); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
 .login-card button:disabled { opacity: 0.5; cursor: default; }
 .login-error { margin: 0; color: var(--red); font-size: 0.8rem; }
+.scope-filters { display: flex; gap: 8px; margin-top: 8px; }
+.scope-filter { display: flex; flex: 1 1 0; align-items: center; gap: 8px; min-width: 0; min-height: 38px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--details); font-size: 0.65rem; font-weight: 600; }
+.scope-filter:focus-within { outline: 2px solid var(--blue); outline-offset: 2px; }
+.scope-filter span { flex: 0 0 auto; }
+.scope-filter select { flex: 1 1 auto; width: auto; min-width: 0; min-height: 36px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--text); font-size: 0.75rem; text-overflow: ellipsis; }
+.scope-filter select:focus-visible { outline: none; }
+.scope-filter option { background: #fff; color: #0f172a; }
+.scope-filter option:disabled { color: #64748b; }
+@media (max-width: 360px) {
+  .scope-filters { flex-direction: column; gap: 6px; }
+}
 @media (prefers-color-scheme: light) {
   :root { --bg: #f8fafc; --surface: #ffffff; --surface-raised: #f1f5f9; --text: #0f172a; --muted: #64748b; --details: #94a3b8; --line: #e2e8f0; }
   .field-header { background: rgba(255, 255, 255, 0.96); }

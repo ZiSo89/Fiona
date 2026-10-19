@@ -235,6 +235,44 @@ test('uses order details as the completed-status source when the daily listing i
   }
 });
 
+test('stores only orders whose service group name matches the store', async () => {
+  const repository = createClosedTicketRepository(':memory:', 'komotini');
+  const withGroup = (orderId, serviceGroup) => {
+    const details = createDetails(orderId);
+    details.orderData.serviceGroup = serviceGroup;
+    return details;
+  };
+  const client = {
+    dailyWorkorders: async () => [createOrder('own'), createOrder('other')],
+    orderDetails: async (orderId) => withGroup(orderId, orderId === 'own'
+      ? 'NEW TECHNOLOGIES LTD KOMOTINI'
+      : 'NEW TECHNOLOGIES AT ORESTIADA'),
+    fetchWorkOrderSlaDetailsWithSession: async () => ({ workOrderSlaDate: '10/14/2026 12:00:00' }),
+    fetchLatestCommentWithSession: async () => null,
+  };
+
+  try {
+    const summary = await syncClosedTickets({
+      client,
+      repository,
+      serviceGroupMatch: 'KOMOTINI',
+      fromDate: parseDateRangeValue('14.10.2026'),
+      toDate: parseDateRangeValue('14.10.2026'),
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      wait: async () => {},
+      now: () => new Date('2026-10-14T12:00:00.000Z'),
+    });
+
+    assert.equal(summary.inserted, 1);
+    assert.equal(summary.otherStore, 1);
+    assert.equal(repository.hasOrder('own'), true);
+    assert.equal(repository.hasOrder('other'), false);
+  } finally {
+    repository.close();
+  }
+});
+
 test('parses CLI dates and repeated service-group options', () => {
   const options = parseArgs([
     '--from-date', '01.08.2026',
@@ -243,12 +281,16 @@ test('parses CLI dates and repeated service-group options', () => {
     '--service-group', '410',
   ]);
   assert.deepEqual(options.serviceGroups, ['395', '410']);
+  assert.equal(options.storeId, 'alexandroupoli');
   assert.equal(options.refreshExisting, false);
   assert.equal(parseArgs([
     '--from-date', '01.08.2026',
     '--to-date', '30.09.2026',
     '--refresh-existing',
   ]).refreshExisting, true);
+  assert.equal(parseArgs([
+    '--from-date', '01.08.2026', '--to-date', '30.09.2026', '--store', 'komotini',
+  ]).storeId, 'komotini');
   assert.throws(() => parseArgs(['--from-date', '01.08.2026']), /Usage:/);
   assert.throws(() => parseArgs(['--from-date', '02.08.2026', '--to-date', '01.08.2026']), /cannot be after/);
 });

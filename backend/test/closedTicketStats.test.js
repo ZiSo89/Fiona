@@ -63,6 +63,24 @@ test('ticket details include the customer fields shown in the calendar panel', (
   }
 });
 
+test('combined monthly stats keep matching order IDs distinct by store', () => {
+  const closed = createClosedTicketRepository(':memory:', null);
+  const observations = createTicketObservationRepository(':memory:', null);
+  try {
+    closed.insert({ ...row('same-id', 'Team A', '2026-10-14T08:00:00.000Z', null, 'unknown'), store_id: 'alexandroupoli' });
+    closed.insert({ ...row('same-id', 'Team A', '2026-10-14T09:00:00.000Z', null, 'unknown'), store_id: 'komotini' });
+
+    const stats = buildMonthlyStats('2026-10', closed, observations);
+
+    assert.equal(stats.totals.total, 2);
+    assert.deepEqual(stats.closedTickets.map((ticket) => ticket.storeId).sort(), ['alexandroupoli', 'komotini']);
+    assert.equal(stats.teams.length, 2);
+  } finally {
+    closed.close();
+    observations.close();
+  }
+});
+
 test('monthly stats reject a malformed month and Athens month handles the boundary', () => {
   assert.throws(() => buildMonthlyStats('2026-13', {}, {}), /YYYY-MM/);
   assert.equal(athensMonthOf('2026-09-30T21:30:00.000Z'), '2026-10');

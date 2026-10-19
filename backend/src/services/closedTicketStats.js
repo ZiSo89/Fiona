@@ -11,10 +11,11 @@ export function athensMonthOf(value) {
 
 const percent = (part, whole) => (whole ? Math.round((part / whole) * 100) : null);
 
-export function getClosedTicketDetails(orderId, closedRepository) {
-  const row = closedRepository.getByOrderId(orderId);
+export function getClosedTicketDetails(orderId, closedRepository, storeId) {
+  const row = closedRepository.getByOrderId(orderId, storeId);
   if (!row) return null;
   return {
+    storeId: row.store_id,
     orderId: row.order_id,
     serviceOrderId: row.service_order_id,
     customer: row.customer_name,
@@ -61,15 +62,17 @@ export function buildMonthlyStats(month, closedRepository, observationRepository
     totals[key] += 1;
 
     const teamName = row.team_name || 'Χωρίς συνεργείο';
-    const team = teams.get(teamName) ?? { team: teamName, total: 0, onTime: 0, late: 0, unknown: 0 };
+    const teamKey = `${row.store_id}:${teamName}`;
+    const team = teams.get(teamKey) ?? { storeId: row.store_id, team: teamName, total: 0, onTime: 0, late: 0, unknown: 0 };
     team.total += 1;
     team[key] += 1;
-    teams.set(teamName, team);
+    teams.set(teamKey, team);
 
-    const call = observationRepository.firstCall(row.order_id);
+    const call = observationRepository.firstCall(row.order_id, row.store_id);
     firstCall[call.outcome === 'on_time' ? 'onTime' : call.outcome === 'late' ? 'late' : 'unknown'] += 1;
 
     closedTickets.push({
+      storeId: row.store_id,
       orderId: row.order_id,
       serviceOrderId: row.service_order_id,
       customer: row.customer_name,
@@ -85,6 +88,7 @@ export function buildMonthlyStats(month, closedRepository, observationRepository
 
     if (outcome === 'late' && row.work_order_sla_date) {
       lateTickets.push({
+        storeId: row.store_id,
         orderId: row.order_id,
         serviceOrderId: row.service_order_id,
         team: teamName,

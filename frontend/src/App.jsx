@@ -127,6 +127,7 @@ const fallbackTickets = [
 const FILTERS = ['ALL', 'OPEN', 'TO CALL', 'CALL LATER', 'APPOINTMENT', 'COMPLETE'];
 const ACTIVE_FILTER_KEY = 'fiona-active-filter';
 const SCROLL_POSITION_KEY = 'fiona-scroll-position';
+const ACTIVE_STORE_KEY = 'fiona-active-store';
 
 function readActiveFilter() {
   const savedFilter = window.sessionStorage.getItem(ACTIVE_FILTER_KEY);
@@ -136,7 +137,13 @@ function readActiveFilter() {
 function saveScrollPosition() {
   window.sessionStorage.setItem(SCROLL_POSITION_KEY, String(window.scrollY));
 }
-const CACHE_KEY = 'fiona-fieldops-tickets-v1';
+const CACHE_KEY_PREFIX = 'fiona-fieldops-tickets-v2';
+
+function readSelectedStore() {
+  return window.localStorage.getItem(ACTIVE_STORE_KEY) || 'alexandroupoli';
+}
+
+const storeCacheKey = (storeId) => `${CACHE_KEY_PREFIX}:${storeId}`;
 
 const formatDateTime = (dateValue) => {
   if (!dateValue) return null;
@@ -236,6 +243,8 @@ function normalizeTicketForUi(ticket) {
     .filter(Boolean))].join(', ');
 
   return {
+    storeId: ticket?.storeId || ticket?.raw?.storeId || 'alexandroupoli',
+    storeName: ticket?.storeName || ticket?.raw?.storeName || 'Αλεξανδρούπολη',
     id: String(ticket?.id || ticket?.serviceOrderId || 'unknown'),
     serviceOrderId: String(ticket?.serviceOrderId || ticket?.id || 'unknown'),
     title: ticket?.order?.planServiceDescription || ticket?.title || 'Service ticket',
@@ -297,21 +306,31 @@ function Icon({ name, size = 20 }) {
   return <svg aria-hidden="true" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
-function readCachedTickets() {
+function readCachedTickets(storeId) {
   try {
-    const cached = JSON.parse(window.localStorage.getItem(CACHE_KEY) || 'null');
-    return Array.isArray(cached) && cached.length ? cached.map(normalizeTicketForUi) : null;
+    const legacyAlexandroupoliCache = storeId === 'alexandroupoli'
+      ? window.localStorage.getItem('fiona-fieldops-tickets-v1')
+      : null;
+    const cached = JSON.parse(window.localStorage.getItem(storeCacheKey(storeId)) || legacyAlexandroupoliCache || 'null');
+    return Array.isArray(cached) ? cached.map(normalizeTicketForUi) : null;
   } catch {
     return null;
   }
 }
 
 function App() {
-  const [tickets, setTickets] = useState(() => readCachedTickets() || fallbackTickets.map(normalizeTicketForUi));
+  const [storeId, setStoreId] = useState(readSelectedStore);
+  const [stores, setStores] = useState([
+    { storeId: 'alexandroupoli', storeName: 'Αλεξανδρούπολη', configured: true },
+    { storeId: 'komotini', storeName: 'Κομοτηνή', configured: false },
+    { storeId: 'orestiada', storeName: 'Ορεστιάδα', configured: false },
+  ]);
+  const [tickets, setTickets] = useState(() => readCachedTickets(readSelectedStore())
+    || (readSelectedStore() === 'alexandroupoli' ? fallbackTickets.map(normalizeTicketForUi) : []));
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [activeFilter, setActiveFilter] = useState(readActiveFilter);
-  const [sourceMode, setSourceMode] = useState(() => readCachedTickets() ? 'cached' : 'fallback');
+  const [sourceMode, setSourceMode] = useState(() => readCachedTickets(readSelectedStore()) ? 'cached' : 'fallback');
   const [showSearch, setShowSearch] = useState(false);
   const [teamFilter, setTeamFilter] = useState(() => localStorage.getItem('fiona-team-filter') || '');
   const [searchQuery, setSearchQuery] = useState('');
@@ -326,6 +345,21 @@ function App() {
   useEffect(() => {
     window.sessionStorage.setItem(ACTIVE_FILTER_KEY, activeFilter);
   }, [activeFilter]);
+
+  useEffect(() => {
+    fetch('/api/stores')
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(response.status))))
+      .then((result) => {
+        if (Array.isArray(result.stores) && result.stores.length) {
+          setStores(result.stores);
+          if (storeId !== 'all' && !result.stores.some((store) => store.storeId === storeId && store.configured)) {
+            const fallbackStore = result.stores.find((store) => store.storeId === 'alexandroupoli' && store.configured);
+            if (fallbackStore) changeStore(fallbackStore.storeId);
+          }
+        }
+      })
+      .catch((error) => console.warn('Store list unavailable:', error.message));
+  }, []);
 
   useEffect(() => {
     let saveTimeout;
@@ -351,9 +385,10 @@ function App() {
   }, [loading]);
 
   useEffect(() => {
+    let current = true;
     const loadTickets = async () => {
       try {
-        const response = await fetch('/api/tickets');
+        const response = await fetch(`/api/tickets?store=${encodeURIComponent(storeId)}`);
         if (!response.ok) throw new Error(`Ticket API returned ${response.status}`);
         const result = await response.json();
 
@@ -361,36 +396,42 @@ function App() {
         const list = Array.isArray(snapshot.tickets) ? snapshot.tickets : [];
         const nextTickets = list.map(normalizeTicketForUi);
 
-        if (result?.status === 'live') {
-          setTickets(nextTickets);
-          setSourceMode('live');
-        } else if (nextTickets.length > 0) {
-          setTickets(nextTickets);
-          setSourceMode('stale');
-        } else {
-          setTickets((currentTickets) => currentTickets.length > 0
-            ? currentTickets
-            : fallbackTickets.map(normalizeTicketForUi));
-          setSourceMode('fallback');
+        if (!current) return;
+        if (result?.status === 'error' && nextTickets.length === 0) {
+          const cached = readCachedTickets(storeId);
+          setTickets(cached || (storeId === 'alexandroupoli' ? fallbackTickets.map(normalizeTicketForUi) : []));
+          setSourceMode(cached ? 'cached' : storeId === 'alexandroupoli' ? 'fallback' : 'empty');
+          setLastUpdated(snapshot?.lastUpdatedAt ?? null);
+          return;
         }
+        setTickets(nextTickets);
+        setSourceMode(result?.status === 'live' ? 'live' : nextTickets.length ? 'stale' : 'empty');
 
-        if (nextTickets.length > 0) window.localStorage.setItem(CACHE_KEY, JSON.stringify(nextTickets.map((ticket) => ticket.raw)));
+        window.localStorage.setItem(storeCacheKey(storeId), JSON.stringify(nextTickets.map((ticket) => ({
+          ...ticket.raw,
+          storeId: ticket.storeId,
+          storeName: ticket.storeName,
+        }))));
         setLastUpdated(snapshot?.lastUpdatedAt ?? null);
       } catch (error) {
-        setSourceMode((currentMode) => currentMode === 'live' || currentMode === 'stale' || currentMode === 'cached' ? 'cached' : 'fallback');
-        setTickets((currentTickets) => currentTickets.length > 0
-          ? currentTickets
-          : fallbackTickets.map(normalizeTicketForUi));
+        if (!current) return;
+        const cached = readCachedTickets(storeId);
+        setSourceMode(cached ? 'cached' : storeId === 'alexandroupoli' ? 'fallback' : 'empty');
+        setTickets(cached || (storeId === 'alexandroupoli' ? fallbackTickets.map(normalizeTicketForUi) : []));
         console.warn('Using fallback dataset because the backend is unavailable:', error.message);
       } finally {
-        setLoading(false);
+        if (current) setLoading(false);
       }
     };
 
+    setLoading(true);
     loadTickets();
     const interval = window.setInterval(loadTickets, 60000);
-    return () => window.clearInterval(interval);
-  }, [syncTrigger]);
+    return () => {
+      current = false;
+      window.clearInterval(interval);
+    };
+  }, [storeId, syncTrigger]);
 
   const filteredTickets = useMemo(() => {
     const query = searchQuery.trim().toLocaleLowerCase();
@@ -406,6 +447,15 @@ function App() {
   const changeTeam = (value) => {
     setTeamFilter(value);
     localStorage.setItem('fiona-team-filter', value);
+  };
+  const changeStore = (value) => {
+    setStoreId(value);
+    window.localStorage.setItem(ACTIVE_STORE_KEY, value);
+    const cached = readCachedTickets(value);
+    setTickets(cached || (value === 'alexandroupoli' ? fallbackTickets.map(normalizeTicketForUi) : []));
+    setSourceMode(cached ? 'cached' : value === 'alexandroupoli' ? 'fallback' : 'empty');
+    setLastUpdated(null);
+    setLoading(true);
   };
 
   const statusCounts = useMemo(() => Object.fromEntries(
@@ -425,19 +475,31 @@ function App() {
           </div>
         </div>
         {showSearch && !isComplete && <label className="search-wrap"><Icon name="search" /><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Αναζήτηση εισιτηρίου ή πελάτη" /></label>}
-        {!isComplete && <div className={`status-line ${sourceMode}`}><span className="status-dot" /><span>{loading ? 'Συγχρονισμός…' : sourceMode === 'live' ? 'Live' : sourceMode === 'stale' ? 'Stale' : 'Offline / Cached'} • {tickets.length} εισιτήρια{lastUpdated ? ` • ${new Date(lastUpdated).toLocaleTimeString('el-GR', { hourCycle: 'h23', hour: '2-digit', minute: '2-digit' })}` : ''}</span><span className="auto-label">auto 60s</span></div>}
+        {!isComplete && <div className={`status-line ${sourceMode}`}><span className="status-dot" /><span>{loading ? 'Συγχρονισμός…' : sourceMode === 'live' ? 'Live' : sourceMode === 'stale' || sourceMode === 'cached' ? 'Stale / Cached' : 'Offline'} • {tickets.length} εισιτήρια{lastUpdated ? ` • ${new Date(lastUpdated).toLocaleTimeString('el-GR', { hourCycle: 'h23', hour: '2-digit', minute: '2-digit' })}` : ''}</span><span className="auto-label">auto 60s</span></div>}
+        <div className="scope-filters">
+          <label className="scope-filter">
+            <span>Κατάστημα</span>
+            <select className="store-select" value={storeId} onChange={(event) => changeStore(event.target.value)}>
+              <option value="all">Όλα τα καταστήματα</option>
+              {stores.map((store) => <option key={store.storeId} value={store.storeId} disabled={!store.configured}>{store.storeName}{store.configured ? '' : ' · μη ρυθμισμένο'}</option>)}
+            </select>
+          </label>
+          {!isComplete && activeFilter === 'APPOINTMENT' && teamNames.length > 0 && (
+            <label className="scope-filter">
+              <span>Συνεργείο</span>
+              <select className="team-select" value={teamFilter} onChange={(event) => changeTeam(event.target.value)}>
+                <option value="">Όλα τα συνεργεία</option>
+                {teamNames.map((name) => <option key={name} value={name}>{name}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
         <div className="filter-row" role="tablist" aria-label="Φίλτρο κατάστασης">
           {visibleFilters.map((filter) => <button key={filter} type="button" role="tab" aria-selected={activeFilter === filter} className={`filter-chip ${activeFilter === filter ? 'active' : ''}`} onClick={() => setActiveFilter(filter)}>{filter === 'ALL' ? 'Όλα' : filter}{filter !== 'COMPLETE' && <span>{statusCounts[filter]}</span>}</button>)}
         </div>
-        {activeFilter === 'APPOINTMENT' && teamNames.length > 0 && (
-          <select className="team-select" value={teamFilter} onChange={(event) => changeTeam(event.target.value)} aria-label="Συνεργείο">
-            <option value="">Όλα τα συνεργεία</option>
-            {teamNames.map((name) => <option key={name} value={name}>{name}</option>)}
-          </select>
-        )}
       </header>
 
-      {isComplete ? <CompleteView /> : <main className="queue-main">
+      {isComplete ? <CompleteView storeId={storeId} stores={stores} /> : <main className="queue-main">
         <div className="queue-heading"><div><h2>{activeFilter === 'ALL' ? 'Εργασίες πεδίου' : activeFilter}</h2></div><span>{filteredTickets.length} εισιτήρια</span></div>
         <div className="ticket-list">
           {filteredTickets.length === 0 && <p className="empty-state">{sourceMode === 'live' ? 'Δεν υπάρχουν εισιτήρια για αυτό το φίλτρο.' : 'Δεν βρέθηκαν εισιτήρια.'}</p>}
@@ -478,8 +540,8 @@ function App() {
               kind: callRemaining <= 0 ? 'critical' : callRemaining <= 3600000 ? 'warning' : 'normal',
               label: callRemaining <= 0 ? 'Κλήση: εκτός ορίου' : 'Κλήση: εντός ορίου',
             };
-            return <article key={ticket.id} className={`ticket-card ${critical ? 'is-critical' : warning ? 'is-warning' : ''}`}>
-              <div className="ticket-header"><div className="ticket-ident"><p className="ticket-id">{ticket.serviceOrderId}</p>{ticket.priority && <span className={`priority-badge priority-${ticket.priorityLevel}`}>{ticket.priority}</span>}</div><span className={`status-badge status-${ticket.status.toLowerCase().replaceAll(' ', '-')}`}>{ticket.status}</span></div>
+            return <article key={`${ticket.storeId}:${ticket.id}`} className={`ticket-card ${critical ? 'is-critical' : warning ? 'is-warning' : ''}`}>
+              <div className="ticket-header"><div className="ticket-ident"><p className="ticket-id">{ticket.serviceOrderId}</p>{ticket.priority && <span className={`priority-badge priority-${ticket.priorityLevel}`}>{ticket.priority}</span>}{storeId === 'all' && <span className="store-badge">{ticket.storeName}</span>}</div><span className={`status-badge status-${ticket.status.toLowerCase().replaceAll(' ', '-')}`}>{ticket.status}</span></div>
               <h3 className="service-title">{ticket.title}</h3>
               <p className="customer-line"><Icon name="pin" size={15} /><span><strong>{ticket.customerLastName}</strong> · {ticket.address}{ticket.city && !ticket.address.toLowerCase().includes(ticket.city.toLowerCase()) ? `, ${ticket.city}` : ''}</span></p>
               {appointmentAt && <div className="appointment-row"><Icon name="clock" size={16} /><span>Ραντεβού: <strong>{appointmentAt}</strong>{ticket.durationMinutes ? ` • ${ticket.durationMinutes}'` : ''}</span></div>}
