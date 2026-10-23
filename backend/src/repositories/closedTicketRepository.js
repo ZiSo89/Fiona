@@ -225,6 +225,10 @@ export function createClosedTicketRepository(dbPath = config.closedTicketsDbPath
       work_order_sla_date, work_order_sla_outcome
     FROM closed_tickets WHERE closed_at >= ? AND closed_at < ? AND (? IS NULL OR store_id = ?) ORDER BY closed_at
   `);
+  const exportBetweenStatement = database.prepare(`
+    SELECT ${columns.join(', ')}
+    FROM closed_tickets WHERE closed_at >= ? AND closed_at < ? AND (? IS NULL OR store_id = ?) ORDER BY closed_at
+  `);
 
   return {
     hasOrder(orderId) {
@@ -255,6 +259,9 @@ export function createClosedTicketRepository(dbPath = config.closedTicketsDbPath
     },
     listClosedBetween(fromIso, toIso) {
       return listBetweenStatement.all(fromIso, toIso, storeId, storeId);
+    },
+    exportClosedBetween(fromIso, toIso) {
+      return exportBetweenStatement.all(fromIso, toIso, storeId, storeId);
     },
     getByOrderId(orderId, requestedStoreId = storeId) {
       return getStatement.get(String(orderId), requestedStoreId, requestedStoreId) ?? null;

@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
 import { FionaClient } from '../services/fionaClient.js';
@@ -13,7 +14,7 @@ export function parseArgs(args) {
       options.refreshExisting = true;
       continue;
     }
-    if (!['--from-date', '--to-date', '--service-group', '--store'].includes(argument)) {
+    if (!['--from-date', '--to-date', '--service-group', '--store', '--export-json'].includes(argument)) {
       throw new Error(`Unknown option: ${argument}`);
     }
     const value = args[index + 1];
@@ -21,11 +22,12 @@ export function parseArgs(args) {
     index += 1;
     if (argument === '--service-group') options.serviceGroups.push(value);
     else if (argument === '--store') options.storeId = value;
+    else if (argument === '--export-json') options.exportJson = value;
     else options[argument === '--from-date' ? 'fromDate' : 'toDate'] = parseDateRangeValue(value);
   }
 
   if (!options.fromDate || !options.toDate) {
-    throw new Error('Usage: npm run sync:closed -- --from-date DD.MM.YYYY --to-date DD.MM.YYYY [--store STORE_ID] [--service-group ID]');
+    throw new Error('Usage: npm run sync:closed -- --from-date DD.MM.YYYY --to-date DD.MM.YYYY [--store STORE_ID] [--service-group ID] [--export-json FILE]');
   }
   if (options.fromDate > options.toDate) throw new Error('--from-date cannot be after --to-date');
   if (!config.fionaStores.some((store) => store.storeId === options.storeId)) throw new Error(`Unknown Fiona store: ${options.storeId}`);
@@ -34,6 +36,31 @@ export function parseArgs(args) {
     options.serviceGroups = store.closedServiceGroups.length ? store.closedServiceGroups : config.closedTicketServiceGroups;
   }
   return options;
+}
+
+export async function writeClosedTicketExport({ repository, fromDate, toDate, storeId, outputPath }) {
+  const from = fromDate.toISOString();
+  const to = new Date(Date.UTC(
+    toDate.getUTCFullYear(),
+    toDate.getUTCMonth(),
+    toDate.getUTCDate() + 1,
+  )).toISOString();
+  const records = repository.exportClosedBetween(from, to);
+  const formatDate = (value) => [
+    String(value.getUTCDate()).padStart(2, '0'),
+    String(value.getUTCMonth() + 1).padStart(2, '0'),
+    value.getUTCFullYear(),
+  ].join('.');
+  const data = {
+    storeId,
+    fromDate: formatDate(fromDate),
+    toDate: formatDate(toDate),
+    count: records.length,
+    records,
+  };
+  await mkdir(path.dirname(outputPath), { recursive: true });
+  await writeFile(outputPath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
+  return records.length;
 }
 
 export async function run(args = process.argv.slice(2)) {
@@ -64,6 +91,17 @@ export async function run(args = process.argv.slice(2)) {
     });
     console.log('\nSync summary:');
     console.log(JSON.stringify(summary, null, 2));
+    if (options.exportJson) {
+      const outputPath = path.resolve(options.exportJson);
+      const exported = await writeClosedTicketExport({
+        repository,
+        fromDate: options.fromDate,
+        toDate: options.toDate,
+        storeId: options.storeId,
+        outputPath,
+      });
+      console.log(`Exported ${exported} tickets to ${outputPath}`);
+    }
     if (summary.failed > 0) process.exitCode = 1;
     return summary;
   } finally {
