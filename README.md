@@ -161,36 +161,6 @@ npm --prefix backend test
 5. Άνοιξε στο κινητό τη διεύθυνση `https://....trycloudflare.com/app/` για το κύριο app ή `https://....trycloudflare.com/tracker/` για το tracker. Το σκέτο domain ανακατευθύνει στο `/app/`. Μοίρασε τη διεύθυνση και το `APP_PASSWORD` μόνο με τους προβλεπόμενους χρήστες και μέσω χωριστού, έμπιστου καναλιού.
 6. Άφησε ανοιχτά τα δύο terminals και τον υπολογιστή ενεργό. Όταν τελειώσεις, σταμάτησε το Tunnel και τον backend με `Ctrl+C` στα αντίστοιχα terminals.
 
-### Σταθερό hostname
-
-Για σταθερή διεύθυνση χρειάζεσαι domain που διαχειρίζεται η Cloudflare και named Tunnel. Κάνε authenticate και δημιούργησε το Tunnel και το DNS route:
-
-```powershell
-cloudflared tunnel login
-cloudflared tunnel create fiona-demo
-cloudflared tunnel route dns fiona-demo fiona.example.com
-```
-
-Αντικατάστησε το `fiona.example.com` με hostname του domain σου. Η εντολή δημιουργίας εμφανίζει το UUID του Tunnel και αποθηκεύει credentials JSON στο `%USERPROFILE%\.cloudflared`. Δημιούργησε το `%USERPROFILE%\.cloudflared\config.yml` με το UUID και την πραγματική διαδρομή του αρχείου credentials:
-
-```yaml
-tunnel: YOUR-TUNNEL-UUID
-credentials-file: C:/Users/YOUR-WINDOWS-USER/.cloudflared/YOUR-TUNNEL-UUID.json
-
-ingress:
-  - hostname: fiona.example.com
-    service: http://localhost:4001
-  - service: http_status:404
-```
-
-Ξεκίνησε τον backend και, σε δεύτερο PowerShell, το named Tunnel:
-
-```powershell
-cloudflared tunnel --config "$env:USERPROFILE\.cloudflared\config.yml" run fiona-demo
-```
-
-Το hostname παραμένει σταθερό, αλλά ο υπολογιστής και οι δύο διεργασίες πρέπει να είναι online. Κράτησε ιδιωτικά το credentials JSON και το config file.
-
 ## API
 
 - `GET /api/stores`: ονόματα και ρυθμισμένη κατάσταση καταστημάτων.
@@ -211,6 +181,14 @@ npm run sync:closed -- --from-date 01.08.2026 --to-date 30.09.2026
 ```
 
 Πρόσθεσε `--store komotini` ή `--store orestiada` για ιστορικό συγχρονισμό του αντίστοιχου λογαριασμού. Χωρίς `--store`, χρησιμοποιείται η Αλεξανδρούπολη. Η Fiona επιστρέφει τα ίδια workorders σε όλους τους λογαριασμούς (κοινό group `395`), γι' αυτό το CLI κρατά μόνο orders όπου το `serviceGroup` των λεπτομερειών περιέχει τη λέξη του καταστήματος (`ALEXANDROUPOL`, `KOMOTINI`, `ORESTIADA`). Η λέξη αλλάζει με `FIONA_<STORE>_SERVICE_GROUP_MATCH`. Η σύνοψη αναφέρει τα orders άλλων καταστημάτων στο `otherStore`.
+
+Για εξαγωγή των εγγραφών του εύρους σε JSON, πρόσθεσε `--export-json` με τη διαδρομή του αρχείου:
+
+```powershell
+npm run sync:closed -- --from-date 01.08.2026 --to-date 30.09.2026 --store komotini --export-json exports/komotini-tickets.json
+```
+
+Το αρχείο περιλαμβάνει τα δεδομένα που έχουν αποθηκευτεί στη βάση για το επιλεγμένο κατάστημα και το συμπεριληπτικό εύρος ημερομηνιών, καθώς και μεταδεδομένα καταστήματος, ημερομηνιών και πλήθους εγγραφών. Αν το αρχείο υπάρχει ήδη, αντικαθίσταται. Περιέχει προσωπικά δεδομένα πελατών· φύλαξέ το και κοινοποίησέ το με την ίδια προσοχή όπως τη βάση SQLite.
 
 Για επανάκτηση και διόρθωση υπαρχουσών εγγραφών:
 

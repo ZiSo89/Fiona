@@ -70,6 +70,31 @@ test('closed-ticket repository updates only an existing order', () => {
   }
 });
 
+test('closed-ticket repository exports full records within the date range and store', () => {
+  const repository = createClosedTicketRepository(':memory:');
+  try {
+    repository.insert(record);
+    repository.insert({
+      ...record,
+      order_id: 'next-day',
+      closed_at: '2026-10-15T00:00:00.000Z',
+    });
+    repository.insert({ ...record, store_id: 'komotini' });
+
+    const exported = repository.exportClosedBetween(
+      '2026-10-14T00:00:00.000Z',
+      '2026-10-15T00:00:00.000Z',
+    );
+    assert.equal(exported.length, 1);
+    assert.equal(exported[0].order_id, '123');
+    assert.equal(exported[0].account_afm, record.account_afm);
+    assert.equal(exported[0].phone, record.phone);
+    assert.equal(exported[0].imported_at, record.imported_at);
+  } finally {
+    repository.close();
+  }
+});
+
 test('store-scoped repositories allow matching order IDs in separate stores', () => {
   const alexandroupoli = createClosedTicketRepository(':memory:', 'alexandroupoli');
   const komotini = createClosedTicketRepository(':memory:', 'komotini');

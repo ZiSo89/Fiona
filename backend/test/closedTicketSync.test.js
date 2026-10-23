@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseArgs } from '../src/cli/syncClosedTickets.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { parseArgs, writeClosedTicketExport } from '../src/cli/syncClosedTickets.js';
 import { createClosedTicketRepository } from '../src/repositories/closedTicketRepository.js';
 import { listDateRange, parseDateRangeValue, syncClosedTickets } from '../src/services/closedTicketSync.js';
 
@@ -291,8 +294,66 @@ test('parses CLI dates and repeated service-group options', () => {
   assert.equal(parseArgs([
     '--from-date', '01.08.2026', '--to-date', '30.09.2026', '--store', 'komotini',
   ]).storeId, 'komotini');
+  assert.equal(parseArgs([
+    '--from-date', '01.08.2026', '--to-date', '30.09.2026',
+    '--export-json', 'exports/tickets.json',
+  ]).exportJson, 'exports/tickets.json');
+  assert.throws(() => parseArgs([
+    '--from-date', '01.08.2026', '--to-date', '30.09.2026', '--export-json',
+  ]), /Missing value for --export-json/);
   assert.throws(() => parseArgs(['--from-date', '01.08.2026']), /Usage:/);
   assert.throws(() => parseArgs(['--from-date', '02.08.2026', '--to-date', '01.08.2026']), /cannot be after/);
+});
+
+test('exports matching closed tickets and date/store metadata as JSON', async () => {
+  const repository = createClosedTicketRepository(':memory:', 'komotini');
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'fiona-closed-ticket-export-'));
+  const outputPath = path.join(directory, 'exports', 'tickets.json');
+  try {
+    repository.insert({
+      store_id: 'komotini',
+      order_id: 'exported',
+      service_order_id: null,
+      customer_id: null,
+      account_afm: null,
+      customer_name: null,
+      team_name: null,
+      city: null,
+      street: null,
+      house_number: null,
+      phone: null,
+      service_description: null,
+      scheduled_at: null,
+      created_at: null,
+      closed_at: '2026-10-14T10:00:00.000Z',
+      call_deadline: null,
+      order_sla_flag: null,
+      work_order_sla_date: null,
+      work_order_sla_outcome: 'unknown',
+      work_order_status: null,
+      comment_text: null,
+      comment_at: null,
+      comment_author: null,
+      imported_at: '2026-10-14T10:01:00.000Z',
+    });
+    const count = await writeClosedTicketExport({
+      repository,
+      fromDate: parseDateRangeValue('14.10.2026'),
+      toDate: parseDateRangeValue('14.10.2026'),
+      storeId: 'komotini',
+      outputPath,
+    });
+    const data = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
+    assert.equal(count, 1);
+    assert.equal(data.storeId, 'komotini');
+    assert.equal(data.fromDate, '14.10.2026');
+    assert.equal(data.toDate, '14.10.2026');
+    assert.equal(data.count, 1);
+    assert.equal(data.records[0].order_id, 'exported');
+  } finally {
+    repository.close();
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('does not persist a partial ticket when enrichment fails', async () => {
