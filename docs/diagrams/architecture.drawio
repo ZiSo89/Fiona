@@ -1,0 +1,20 @@
+<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>
+<mxCell id="c1" value="Client" style="swimlane;html=1;startSize=24;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="20" y="20" width="160" height="200" as="geometry"/></mxCell>
+<mxCell id="pwa" value="Mobile PWA&lt;br&gt;(React / Vite)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="c1"><mxGeometry x="20" y="40" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="trk" value="Team Points&lt;br&gt;Tracker /tracker/" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="c1"><mxGeometry x="20" y="120" width="120" height="50" as="geometry"/></mxCell>
+<mxCell id="c2" value="Backend (Node.js / Express)" style="swimlane;html=1;startSize=24;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1"><mxGeometry x="230" y="20" width="360" height="200" as="geometry"/></mxCell>
+<mxCell id="rt" value="routes + middleware&lt;br&gt;(auth)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="c2"><mxGeometry x="20" y="40" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="ct" value="controllers" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="c2"><mxGeometry x="130" y="40" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="sv" value="services&lt;br&gt;(polling, SLA, stats, sync)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="c2"><mxGeometry x="240" y="40" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="rp" value="repositories" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="c2"><mxGeometry x="240" y="130" width="110" height="50" as="geometry"/></mxCell>
+<mxCell id="cli" value="CLI&lt;br&gt;sync:closed" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="c2"><mxGeometry x="20" y="130" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="db" value="SQLite" style="shape=cylinder3;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="640" y="150" width="80" height="80" as="geometry"/></mxCell>
+<mxCell id="fi" value="Fiona API" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1"><mxGeometry x="630" y="40" width="100" height="50" as="geometry"/></mxCell>
+<mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;html=1;endArrow=block;" edge="1" parent="1" source="c1" target="c2"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e2" style="html=1;endArrow=block;" edge="1" parent="c2" source="rt" target="ct"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e3" style="html=1;endArrow=block;" edge="1" parent="c2" source="ct" target="sv"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e4" style="html=1;endArrow=block;" edge="1" parent="c2" source="sv" target="rp"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e5" style="html=1;endArrow=block;" edge="1" parent="c2" source="cli" target="sv"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e6" value="polling" style="html=1;endArrow=block;" edge="1" parent="1" source="c2" target="fi"><mxGeometry relative="1" as="geometry"/></mxCell>
+<mxCell id="e7" style="html=1;endArrow=block;" edge="1" parent="1" source="c2" target="db"><mxGeometry relative="1" as="geometry"/></mxCell>
+</root></mxGraphModel>
