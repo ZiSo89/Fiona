@@ -62,3 +62,26 @@ jobs:
         run: npm ci --prefix project-tracker
       - name: Build tracker
         run: npm run build --prefix project-tracker
+
+  tracker-e2e:
+    name: Tracker e2e
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            project-tracker/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+      - name: Install tracker dependencies
+        run: npm ci --prefix project-tracker
+      - name: Install Playwright browser
+        run: npx --prefix project-tracker playwright install --with-deps chromium
+      - name: Run tracker e2e tests
+        run: npm run test:e2e --prefix project-tracker
