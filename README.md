@@ -24,9 +24,35 @@ Mobile-first εφαρμογή PWA για την καθημερινή διαχε�
 
 ## Ανάπτυξη
 
+### Ροή εργασίας Git
+
+Το `main` είναι η σταθερή branch. Όλες οι αλλαγές περνούν από Pull Request· μην κάνεις απευθείας commit ή force push στο `main`.
+
+1. Ξεκίνα από ενημερωμένο `main` και δημιούργησε branch για μία συγκεκριμένη εργασία:
+
+   ```powershell
+   git switch main
+   git pull
+   git switch -c feature/42-ticket-search
+   ```
+
+2. Χρησιμοποίησε ονόματα όπως `feature/<issue>-<περιγραφή>`, `fix/<issue>-<περιγραφή>` ή `hotfix/<περιγραφή>`. Αν δεν υπάρχει issue, παράλειψε τον αριθμό.
+3. Κράτησε κάθε commit μικρό και σχετικό. Προτεινόμενα μηνύματα: `feat: add ticket search`, `fix: correct SLA calculation`, `docs: explain Git workflow`.
+4. Στείλε το branch και άνοιξε Pull Request προς `main`:
+
+   ```powershell
+   git push -u origin feature/42-ticket-search
+   ```
+
+5. Περίμενε να περάσουν οι έλεγχοι CI, έλεγξε το diff και κάνε merge από το GitHub. Διέγραψε το προσωρινό branch μετά το merge.
+
+Το CI εκτελεί τα backend tests και τα builds του frontend και του tracker σε Pull Requests προς `main`. Το `development` δεν χρειάζεται ως μόνιμο branch για την τρέχουσα ροή· πρόσθεσέ το μόνο αν χρειάζεσαι ξεχωριστή staging έκδοση ή ομαδοποιημένες releases.
+
+Για προστασία του `main`, ενεργοποίησε στο GitHub ruleset ή branch protection: απαίτηση Pull Request, απαίτηση επιτυχίας των `Backend tests`, `Frontend build` και `Tracker build`, απαγόρευση force push και διαγραφής branch. Αυτές οι ρυθμίσεις γίνονται χειροκίνητα στο GitHub και δεν ενεργοποιούνται από το workflow.
+
 ### Αρχιτεκτονική
 
-- `frontend/`: React 18, Vite και PWA service worker. Η διεπαφή ζητά δεδομένα από το ίδιο origin μέσω `/api/*`. Το production build βρίσκεται στο `frontend/dist`.
+- `frontend/`: React 18, Vite και PWA service worker στο `/app/`. Η ρίζα `/` ανακατευθύνει στο `/app/`, ενώ η διεπαφή ζητά δεδομένα από το ίδιο origin μέσω `/api/*`. Το production build βρίσκεται στο `frontend/dist`.
 - `project-tracker/`: ξεχωριστό React/Vite PWA στο `/tracker/`, με δικό του manifest και service worker scope. Χρησιμοποιεί μόνο τα περιορισμένα `/api/tracker/*` endpoints.
 - `backend/`: Node.js ES modules και Express. Κάθε ρυθμισμένο κατάστημα έχει ξεχωριστό Fiona client, session token και polling snapshot. Ο normalizer μετατρέπει κάθε απάντηση στο contract της διεπαφής και προσθέτει την ταυτότητα καταστήματος.
 - Οι πίνακες `project_tracker_*` αποθηκεύουν μόνο order ID, κατάστημα, συνεργείο, κατηγορία, ώρα ολοκλήρωσης, πόντους/overrides και audit log. Χρησιμοποιούν την ίδια SQLite διαδρομή με τα closed tickets, αλλά ξεχωριστό schema.
@@ -66,7 +92,7 @@ npm run dev:frontend
 npm run dev:tracker
 ```
 
-Το tracker development server είναι στο `http://localhost:5174/tracker/` και κάνει proxy τα API requests στο `http://localhost:4000` από προεπιλογή. Αν ο backend χρησιμοποιεί άλλη θύρα, όρισε `BACKEND_URL` πριν ξεκινήσεις το `dev:tracker`.
+Το κύριο app είναι στο `http://localhost:5173/app/`. Το tracker development server είναι στο `http://localhost:5174/tracker/` και κάνει proxy τα API requests στο `http://localhost:4000` από προεπιλογή. Αν ο backend χρησιμοποιεί άλλη θύρα, όρισε `BACKEND_URL` πριν ξεκινήσεις το `dev:tracker`.
 
 Για τα tests του backend:
 
@@ -88,7 +114,7 @@ npm --prefix backend test
    npm run start:backend
    ```
 
-2. Επιβεβαίωσε ότι η εφαρμογή ανοίγει τοπικά, για παράδειγμα στο `http://localhost:4001` αν έχεις ορίσει `PORT=4001`.
+2. Επιβεβαίωσε ότι το `/` ανακατευθύνει στο κύριο app (`/app/`) και ότι το tracker ανοίγει στο `/tracker/`, για παράδειγμα στο `http://localhost:4001` αν έχεις ορίσει `PORT=4001`.
 3. Σε δεύτερο PowerShell, εγκατάστησε το `cloudflared` αν δεν υπάρχει ήδη:
 
    ```powershell
@@ -102,7 +128,7 @@ npm --prefix backend test
    cloudflared tunnel --url http://localhost:4001
    ```
 
-5. Άνοιξε στο κινητό τη διεύθυνση `https://....trycloudflare.com` που εμφανίζεται στο terminal. Μοίρασε τη διεύθυνση και το `APP_PASSWORD` μόνο με τους προβλεπόμενους χρήστες και μέσω χωριστού, έμπιστου καναλιού.
+5. Άνοιξε στο κινητό τη διεύθυνση `https://....trycloudflare.com/app/` για το κύριο app ή `https://....trycloudflare.com/tracker/` για το tracker. Το σκέτο domain ανακατευθύνει στο `/app/`. Μοίρασε τη διεύθυνση και το `APP_PASSWORD` μόνο με τους προβλεπόμενους χρήστες και μέσω χωριστού, έμπιστου καναλιού.
 6. Άφησε ανοιχτά τα δύο terminals και τον υπολογιστή ενεργό. Όταν τελειώσεις, σταμάτησε το Tunnel και τον backend με `Ctrl+C` στα αντίστοιχα terminals.
 
 ### Σταθερό hostname
@@ -172,9 +198,11 @@ npm run sync:closed -- --from-date 01.08.2026 --to-date 30.09.2026 --refresh-exi
 
 ## SLA και συμπεριφορά δεδομένων
 
+Για αναλυτικούς κανόνες, τύπους υπολογισμού και συγκεντρωτικά ευρήματα από τα συγχρονισμένα δεδομένα, δες το [SLA.md](./SLA.md).
+
 - Το `workOrderSlaDate` είναι ο στόχος ολοκλήρωσης και συγκρίνεται με το `workOrderFinishedOnPremiseTime`. Αν λείπει ημερομηνία, το αποτέλεσμα είναι `unknown`.
 - Το order `deadline` είναι η προθεσμία πρώτης κλήσης (παράθυρο 4 ωρών), αποθηκεύεται ως `call_deadline` και δεν αξιολογείται έναντι της ολοκλήρωσης.
-- Κατά το polling, αποθηκεύεται κάθε αλλαγή κατάστασης ανοιχτού ticket στον `ticket_status_observations`. Η πρώτη μετάβαση σε `CALL LATER` ή `APPOINTMENT` συγκρίνεται με το call deadline. Αν το ticket δεν παρατηρήθηκε ποτέ ανοιχτό, το αποτέλεσμα πρώτης κλήσης είναι `unknown`.
+- Κατά το polling, αποθηκεύονται οι καταστάσεις ανοιχτού ticket στον `ticket_status_observations`. Η πρώτη καταγεγραμμένη κατάσταση `CALL LATER` ή `APPOINTMENT` συγκρίνεται με το call deadline. Αν λείπει η κατάσταση ή η προθεσμία, το αποτέλεσμα πρώτης κλήσης είναι `unknown`.
 - Η Fiona επιστρέφει πάντα `N` στο `slaSurpassed`, επομένως αυτό το πεδίο δεν αποθηκεύεται.
 - Αν η Fiona δεν είναι διαθέσιμη, ο backend διατηρεί το τελευταίο επιτυχημένο snapshot ως `stale`. Demo data χρησιμοποιούνται μόνο όταν δεν υπάρχει διαθέσιμο live snapshot. Ταυτόχρονες αιτήσεις refresh μοιράζονται το ίδιο Fiona request.
 
