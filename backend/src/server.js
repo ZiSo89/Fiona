@@ -188,12 +188,12 @@ if (fs.existsSync(path.join(projectTrackerDist, 'index.html'))) {
 } else {
   app.get(['/tracker', '/tracker/', '/tracker/*'], (req, res) => res.status(503).send('Project Tracker build is not available.'));
 }
+app.get('/', (req, res) => res.redirect(302, '/app/'));
 if (fs.existsSync(path.join(frontendDist, 'index.html'))) {
-  app.use(express.static(frontendDist));
-  app.use((req, res, next) => {
-    if (req.method !== 'GET' || req.path.startsWith('/api/')) return next();
-    return res.sendFile(path.join(frontendDist, 'index.html'));
-  });
+  app.use('/app', express.static(frontendDist, { index: false }));
+  app.get(['/app', '/app/', '/app/*'], (req, res) => res.sendFile(path.join(frontendDist, 'index.html')));
+} else {
+  app.get(['/app', '/app/', '/app/*'], (req, res) => res.status(503).send('Fiona app build is not available.'));
 }
 
 app.listen(config.port, () => {

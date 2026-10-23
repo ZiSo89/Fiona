@@ -200,7 +200,7 @@ export function createClosedTicketRepository(dbPath = config.closedTicketsDbPath
   const countStatement = database.prepare('SELECT COUNT(*) AS count FROM closed_tickets WHERE (? IS NULL OR store_id = ?)');
   const getStatement = database.prepare(`
     SELECT store_id, order_id, service_order_id, customer_id, account_afm, customer_name, team_name, city, street,
-      house_number, phone, service_description, created_at, scheduled_at, closed_at
+      house_number, phone, service_description, created_at, scheduled_at, closed_at, comment_text
     FROM closed_tickets WHERE order_id = ? AND (? IS NULL OR store_id = ?)
   `);
   const getTrackerEditorDetailsStatement = database.prepare(`

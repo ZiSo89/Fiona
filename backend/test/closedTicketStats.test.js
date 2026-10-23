@@ -49,6 +49,7 @@ test('ticket details include the customer fields shown in the calendar panel', (
     closed.insert({
       ...row('9', 'Team A', '2026-10-01T08:00:00.000Z', null, 'unknown'),
       customer_name: 'ΣΟΥΝΤΟΥΛΙΔΗΣ', phone: '6987116045', customer_id: '2551116843', account_afm: '133542447', street: 'ΑΛΚΙΒΙΑΔΟΥ', house_number: '7', city: 'ΑΛΕΞΑΝΔΡΟΥΠΟΛΗ',
+      comment_text: 'Η εργασία ολοκληρώθηκε.',
     });
 
     const details = getClosedTicketDetails('9', closed);
@@ -57,6 +58,7 @@ test('ticket details include the customer fields shown in the calendar panel', (
     assert.equal(details.phone, '6987116045');
     assert.equal(details.landline, '2551116843');
     assert.equal(details.afm, '133542447');
+    assert.equal(details.lastComment, 'Η εργασία ολοκληρώθηκε.');
     assert.equal(getClosedTicketDetails('missing', closed), null);
   } finally {
     closed.close();
