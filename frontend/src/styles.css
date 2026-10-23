@@ -498,7 +498,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .brand-row { min-height: 48px; gap: 10px; }
 .brand-lockup { gap: 9px; flex: 0 0 auto; }
 .brand-lockup p, .brand-lockup h1, .modal-heading p { margin: 0; }
-.brand-mark { display: block; width: 40px; height: 40px; border-radius: 6px; background: #fff; object-fit: contain; }
+.brand-mark { display: block; width: 40px; height: 40px; border-radius: 0; background: transparent; object-fit: contain; }
 .brand-lockup p { color: #60a5fa; font-size: 0.62rem; font-weight: 800; letter-spacing: 0.12em; }
 .brand-lockup h1 { margin-top: 1px; color: white; font-size: 0.92rem; font-weight: 850; letter-spacing: 0.05em; }
 .header-actions { gap: 3px; margin-left: auto; }
@@ -638,7 +638,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
   --bg: #0c0d0e; --surface: #141619; --surface-raised: #1b1e22; --text: #f0f2f5; --muted: #b0bac4; --details: #929eaa;
   --blue: #0284c7; --line: #2a3037; --green: #10b981; --amber: #f59e0b; --red: #ef4444;
 }
-.brand-mark { width: 32px; height: 32px; }
+.brand-mark { width: 36px; height: 36px; }
 .brand-lockup h1 { font-size: 0.85rem; font-weight: 600; letter-spacing: 0; }
 .brand-lockup p { margin-top: 1px; color: var(--details); font-size: 0.62rem; font-weight: 500; letter-spacing: 0; }
 .field-header { background: rgba(20, 22, 25, 0.96); }
@@ -697,6 +697,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .view-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-top: 10px; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .view-switch button { min-height: 36px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 0.78rem; font-weight: 600; cursor: pointer; }
 .view-switch button.active { background: var(--surface-raised); color: var(--text); box-shadow: 0 0 0 1px var(--line); }
+.view-select-wrap { display: none; }
 .stats-main { display: grid; gap: 16px; padding: 18px 0 32px; }
 .month-nav { display: flex; align-items: center; justify-content: space-between; }
 .month-nav h2 { margin: 0; color: var(--text); font-size: 1rem; }
@@ -753,6 +754,11 @@ button.done-card { width: 100%; text-align: left; font: inherit; cursor: pointer
 .detail-rule { height: 1px; margin: 8px 0 6px; background: var(--line); }
 .detail-note { min-height: 1.2em; margin-top: 4px; color: var(--green); font-size: 0.7rem; }
 .detail-skeleton { min-height: 120px; border-radius: 8px; }
+@media (max-width: 600px) {
+  .view-switch { display: none; }
+  .view-select-wrap { display: grid; gap: 6px; margin-top: 10px; color: var(--muted); font-size: 0.72rem; font-weight: 600; }
+  .view-select-wrap select { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; }
+}
 .login-screen { min-height: 100vh; display: grid; place-items: center; padding: 20px; }
 .login-card { width: min(100%, 340px); display: grid; gap: 12px; padding: 24px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
 .login-card h1 { margin: 0 0 4px; font-size: 1.4rem; }

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import CompleteView from './CompleteView.jsx';
+import { normalizeSearchText } from './searchUtils.js';
 
 const fallbackTickets = [
   {
@@ -434,14 +435,22 @@ function App() {
   }, [storeId, syncTrigger]);
 
   const filteredTickets = useMemo(() => {
-    const query = searchQuery.trim().toLocaleLowerCase();
+    const query = normalizeSearchText(searchQuery.trim());
     return tickets.filter((ticket) => {
       const matchesStatus = activeFilter === 'ALL' || ticket.status === activeFilter;
-      const matchesQuery = !query || [ticket.serviceOrderId, ticket.title, ticket.customerName, ticket.address].some((value) => value.toLocaleLowerCase().includes(query));
+      const matchesQuery = !query || [ticket.serviceOrderId, ticket.title, ticket.customerName, ticket.address]
+        .some((value) => normalizeSearchText(value).includes(query));
       const matchesTeam = activeFilter !== 'APPOINTMENT' || !teamFilter || ticket.teamName === teamFilter;
       return matchesStatus && matchesQuery && matchesTeam && ticket.status !== 'COMPLETED';
     }).sort(compareTickets);
   }, [activeFilter, searchQuery, teamFilter, tickets]);
+
+  const searchSuggestions = useMemo(() => [...new Set(tickets.flatMap((ticket) => [
+    ticket.serviceOrderId,
+    ticket.title,
+    ticket.customerName,
+    ticket.address,
+  ].filter(Boolean).map(String)))], [tickets]);
 
   const teamNames = useMemo(() => [...new Set(tickets.filter((ticket) => ticket.status === 'APPOINTMENT' && ticket.teamName).map((ticket) => ticket.teamName))].sort(), [tickets]);
   const changeTeam = (value) => {
@@ -468,13 +477,14 @@ function App() {
     <div className="app-shell">
       <header className="field-header">
         <div className="brand-row">
-          <div className="brand-lockup"><img className="brand-mark" src="/alpha-logo.webp" alt="" /><div><h1>Alpha Πληροφορική</h1><p>Fiona Field Service</p></div></div>
+          <div className="brand-lockup"><img className="brand-mark" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" /><div><h1>Alpha Πληροφορική</h1><p>Fiona Field Service</p></div></div>
           <div className="header-actions">
             <button className={`icon-button ${loading ? 'is-loading' : ''}`} type="button" aria-label={loading ? 'Γίνεται συγχρονισμός' : 'Συγχρονισμός εισιτηρίων'} title={loading ? 'Γίνεται συγχρονισμός' : 'Συγχρονισμός εισιτηρίων'} aria-busy={loading} disabled={loading} onClick={() => { saveScrollPosition(); setLoading(true); setSyncTrigger((value) => value + 1); }}><Icon name="sync" /></button>
             <button className="icon-button" type="button" aria-label="Αναζήτηση" title="Search" onClick={() => setShowSearch((value) => !value)}><Icon name="search" /></button>
           </div>
         </div>
-        {showSearch && !isComplete && <label className="search-wrap"><Icon name="search" /><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Αναζήτηση εισιτηρίου ή πελάτη" /></label>}
+        {showSearch && <label className="search-wrap"><Icon name="search" /><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Αναζήτηση εισιτηρίου ή πελάτη" list={isComplete ? 'closed-ticket-suggestions' : 'ticket-search-suggestions'} /></label>}
+        {!isComplete && <datalist id="ticket-search-suggestions">{searchSuggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}</datalist>}
         {!isComplete && <div className={`status-line ${sourceMode}`}><span className="status-dot" /><span>{loading ? 'Συγχρονισμός…' : sourceMode === 'live' ? 'Live' : sourceMode === 'stale' || sourceMode === 'cached' ? 'Stale / Cached' : 'Offline'} • {tickets.length} εισιτήρια{lastUpdated ? ` • ${new Date(lastUpdated).toLocaleTimeString('el-GR', { hourCycle: 'h23', hour: '2-digit', minute: '2-digit' })}` : ''}</span><span className="auto-label">auto 60s</span></div>}
         <div className="scope-filters">
           <label className="scope-filter">
@@ -499,7 +509,7 @@ function App() {
         </div>
       </header>
 
-      {isComplete ? <CompleteView storeId={storeId} stores={stores} /> : <main className="queue-main">
+      {isComplete ? <CompleteView storeId={storeId} stores={stores} searchQuery={searchQuery} onSearchChange={setSearchQuery} showSearch={showSearch} /> : <main className="queue-main">
         <div className="queue-heading"><div><h2>{activeFilter === 'ALL' ? 'Εργασίες πεδίου' : activeFilter}</h2></div><span>{filteredTickets.length} εισιτήρια</span></div>
         <div className="ticket-list">
           {filteredTickets.length === 0 && <p className="empty-state">{sourceMode === 'live' ? 'Δεν υπάρχουν εισιτήρια για αυτό το φίλτρο.' : 'Δεν βρέθηκαν εισιτήρια.'}</p>}
