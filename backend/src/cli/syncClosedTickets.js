@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
 import { FionaClient } from '../services/fionaClient.js';
-import { createClosedTicketRepository } from '../services/closedTicketRepository.js';
+import { createClosedTicketRepository } from '../repositories/closedTicketRepository.js';
 import { parseDateRangeValue, syncClosedTickets } from '../services/closedTicketSync.js';
 
 export function parseArgs(args) {

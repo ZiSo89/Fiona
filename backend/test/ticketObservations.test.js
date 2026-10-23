@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTicketObservationRepository } from '../src/services/ticketObservationRepository.js';
+import { createTicketObservationRepository } from '../src/repositories/ticketObservationRepository.js';
 import { createPollingService } from '../src/services/pollingService.js';
 
 const ticket = (status, statusTime, callDue = '2026-10-14T09:00:00.000Z') => ({

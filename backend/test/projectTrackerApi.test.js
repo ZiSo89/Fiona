@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { createProjectTrackerAuth, projectTrackerEditorKey } from '../src/projectTrackerAuth.js';
-import { createProjectTrackerApi } from '../src/services/projectTrackerApi.js';
-import { createProjectTrackerRepository } from '../src/services/projectTrackerRepository.js';
+import { createProjectTrackerAuth, projectTrackerEditorKey } from '../src/middleware/projectTrackerAuth.js';
+import { createProjectTrackerRoutes } from '../src/routes/projectTrackerRoutes.js';
+import { createProjectTrackerRepository } from '../src/repositories/projectTrackerRepository.js';
 
 async function withApi(run) {
   const repository = createProjectTrackerRepository(':memory:');
@@ -23,7 +23,7 @@ async function withApi(run) {
   });
   const app = express();
   app.use(express.json());
-  app.use('/api/tracker', createProjectTrackerApi({
+  app.use('/api/tracker', createProjectTrackerRoutes({
     repository,
     auth,
     stores: [{ storeId: 'alexandroupoli', storeName: 'Alexandroupoli' }],

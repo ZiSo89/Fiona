@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createProjectTrackerAuth, projectTrackerEditorKey } from '../src/projectTrackerAuth.js';
+import { createProjectTrackerAuth, projectTrackerEditorKey } from '../src/middleware/projectTrackerAuth.js';
 
 function call(handler, req) {
   const res = { headers: {}, statusCode: 200, body: null };
