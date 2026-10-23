@@ -180,7 +180,7 @@ function ClosedItem({ ticket, storeName }) {
   );
 }
 
-function ClosedList({ tickets, stores, query, onQueryChange, showSearch }) {
+function ClosedList({ tickets, stores, query }) {
   const needle = normalizeSearchText(query.trim());
   const visible = needle
     ? tickets.filter((ticket) => [ticket.serviceOrderId, ticket.customer, ticket.address, ticket.service, ticket.team]
@@ -189,7 +189,6 @@ function ClosedList({ tickets, stores, query, onQueryChange, showSearch }) {
 
   return (
     <section className="stats-section">
-      {!showSearch && <input className="list-search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Αναζήτηση πελάτη, διεύθυνσης ή εισιτηρίου" aria-label="Αναζήτηση ολοκληρωμένων" list="closed-ticket-suggestions" />}
       {visible.length === 0 && <p className="empty-state">Δεν βρέθηκαν εργασίες.</p>}
       {visible.map((ticket) => <ClosedItem
         key={`${ticket.storeId}:${ticket.orderId}`}
@@ -233,7 +232,7 @@ function StatsSections({ stats, stores }) {
   );
 }
 
-export default function CompleteView({ storeId, stores, searchQuery, onSearchChange, showSearch }) {
+export default function CompleteView({ storeId, stores, searchQuery }) {
   const [month, setMonth] = useState(readCompleteMonth);
   const [section, setSection] = useState(readCompleteSection);
   const [stats, setStats] = useState(null);
@@ -272,14 +271,6 @@ export default function CompleteView({ storeId, stores, searchQuery, onSearchCha
         <button type="button" aria-label="Επόμενος μήνας" disabled={isCurrent} onClick={() => setMonth(shiftMonth(month, 1))}>›</button>
       </div>
 
-      <label className="view-select-wrap">
-        <span>Προβολή</span>
-        <select aria-label="Προβολή ολοκληρωμένων" value={section} onChange={(event) => setSection(event.target.value)}>
-          <option value="list">Ολοκληρωμένα</option>
-          <option value="stats">Στατιστικά</option>
-        </select>
-      </label>
-
       <div className="view-switch" role="tablist" aria-label="Προβολή ολοκληρωμένων">
         <button type="button" role="tab" aria-selected={section === 'list'} className={section === 'list' ? 'active' : ''} onClick={() => setSection('list')}>Ολοκληρωμένα</button>
         <button type="button" role="tab" aria-selected={section === 'stats'} className={section === 'stats' ? 'active' : ''} onClick={() => setSection('stats')}>Στατιστικά</button>
@@ -296,7 +287,7 @@ export default function CompleteView({ storeId, stores, searchQuery, onSearchCha
         ticket.team,
       ].filter(Boolean).map(String)))].map((suggestion) => <option key={suggestion} value={suggestion} />)}</datalist>}
       {stats && stats.totals.total > 0 && (section === 'list'
-        ? <ClosedList tickets={stats.closedTickets} stores={stores} query={searchQuery} onQueryChange={onSearchChange} showSearch={showSearch} />
+        ? <ClosedList tickets={stats.closedTickets} stores={stores} query={searchQuery} />
         : <StatsSections stats={stats} stores={stores} />)}
     </main>
   );
