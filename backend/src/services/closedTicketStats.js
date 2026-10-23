@@ -30,6 +30,7 @@ export function getClosedTicketDetails(orderId, closedRepository, storeId) {
     createdAt: row.created_at,
     scheduledAt: row.scheduled_at,
     closedAt: row.closed_at,
+    lastComment: row.comment_text,
   };
 }
 
