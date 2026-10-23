@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 5174",
     "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0 --port 4174"
+    "preview": "vite preview --host 0.0.0.0 --port 4174",
+    "test:e2e": "vite build && playwright test"
   },
   "dependencies": {
     "fiona-mobile-ops": "file:..",
@@ -15,6 +16,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@vitejs/plugin-react": "^4.3.2",
     "vite": "^5.4.10"
   }

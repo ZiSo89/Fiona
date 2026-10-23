@@ -67,6 +67,10 @@ function profileKey(profile) {
   return `${profile.storeId}::${profile.teamName}`;
 }
 
+function jobKey(job) {
+  return `${job.storeId}::${job.orderId}`;
+}
+
 function readTrackerView() {
   try {
     const saved = JSON.parse(localStorage.getItem('project-tracker-view') || '{}');
@@ -363,8 +367,9 @@ function App() {
   };
 
   const saveCorrection = async (job) => {
-    const draft = drafts[job.orderId] || { categoryId: job.categoryId || '', pointsOverride: job.pointsOverride ?? '' };
-    setSavingJobId(job.orderId);
+    const key = jobKey(job);
+    const draft = drafts[key] || { categoryId: job.categoryId || '', pointsOverride: job.pointsOverride ?? '' };
+    setSavingJobId(key);
     try {
       await trackerRequest(`/jobs/${encodeURIComponent(job.orderId)}`, {
         method: 'PUT',
@@ -377,7 +382,7 @@ function App() {
       });
       setDrafts((current) => {
         const next = { ...current };
-        delete next[job.orderId];
+        delete next[key];
         return next;
       });
       setRefreshTick((tick) => tick + 1);
@@ -409,7 +414,9 @@ function App() {
         .filter(Boolean).join(' ').toLocaleLowerCase('el-GR').includes(needle);
     })
     .sort((a, b) => (newestFirst ? 1 : -1) * (new Date(b.closedAt) - new Date(a.closedAt)));
-  const activeJobId = visibleJobs.some((job) => job.orderId === editingJobId) ? editingJobId : visibleJobs[0]?.orderId;
+  const activeJobId = visibleJobs.some((job) => jobKey(job) === editingJobId)
+    ? editingJobId
+    : visibleJobs[0] ? jobKey(visibleJobs[0]) : '';
 
   const dayMap = new Map((monthData?.days || []).map((day) => [day.date, day]));
   const cells = calendarCells(month);
@@ -565,14 +572,14 @@ function App() {
               )}
               <div className="job-list">
                 {visibleJobs.length ? visibleJobs.map((job) => {
-                  const jobKey = `${job.storeId}::${job.orderId}`;
-                  const details = jobDetails[jobKey];
-                  const isActive = job.orderId === activeJobId;
-                  const draft = drafts[job.orderId] || { categoryId: job.categoryId || '', pointsOverride: job.pointsOverride ?? '' };
+                  const key = jobKey(job);
+                  const details = jobDetails[key];
+                  const isActive = key === activeJobId;
+                  const draft = drafts[key] || { categoryId: job.categoryId || '', pointsOverride: job.pointsOverride ?? '' };
                   const isDirty = draft.categoryId !== (job.categoryId || '')
                     || String(draft.pointsOverride) !== String(job.pointsOverride ?? '');
                   return (
-                    <article className="job-row" key={`${job.storeId}-${job.orderId}`}>
+                    <article className="job-row" key={key}>
                       <div className="job-category-line">
                         <span className={`category-marker ${job.mapped ? 'mapped' : 'unmapped'}`} />
                         <h3>{jobLabel(job)}</h3>
@@ -582,14 +589,14 @@ function App() {
                       {editorMatchesProfile && (
                         <>
                           <div className="job-details-panel">
-                            {loadingJobDetails[jobKey] ? (
+                            {loadingJobDetails[key] ? (
                               <p className="job-details-loading"><LoaderCircle size={14} className="spin" /> Φόρτωση στοιχείων…</p>
                             ) : details ? (
                               <>
                                 <div className="job-code-line">
                                   <span className="job-code">{details.serviceOrderId}</span>
-                                  <button type="button" className="copy-button" aria-label="Αντιγραφή κωδικού" onClick={() => void copyOrderCode(jobKey, details.serviceOrderId)}>
-                                    {copiedJobId === jobKey ? <Check size={12} /> : <Copy size={12} />}
+                                  <button type="button" className="copy-button" aria-label="Αντιγραφή κωδικού" onClick={() => void copyOrderCode(key, details.serviceOrderId)}>
+                                    {copiedJobId === key ? <Check size={12} /> : <Copy size={12} />}
                                   </button>
                                 </div>
                                 {(details.customerName || details.address) && (
@@ -617,7 +624,7 @@ function App() {
                               <span>Κατηγορία</span>
                               <select
                                 value={draft.categoryId}
-                                onChange={(event) => setDrafts((current) => ({ ...current, [job.orderId]: { ...draft, categoryId: event.target.value } }))}
+                                onChange={(event) => setDrafts((current) => ({ ...current, [key]: { ...draft, categoryId: event.target.value } }))}
                               >
                                 <option value="">Χωρίς αντιστοίχιση</option>
                                 {categories.map((category) => <option value={category.id} key={category.id}>{category.name} · {category.points} pts</option>)}
@@ -632,18 +639,18 @@ function App() {
                                 step="1"
                                 placeholder={categories.find((category) => category.id === draft.categoryId)?.points ?? '0'}
                                 value={draft.pointsOverride}
-                                onChange={(event) => setDrafts((current) => ({ ...current, [job.orderId]: { ...draft, pointsOverride: event.target.value } }))}
+                                onChange={(event) => setDrafts((current) => ({ ...current, [key]: { ...draft, pointsOverride: event.target.value } }))}
                               />
                             </label>
-                            <button className="save-correction" type="button" disabled={!isDirty || savingJobId === job.orderId} onClick={() => void saveCorrection(job)}>
-                              {savingJobId === job.orderId ? <RefreshCw size={15} className="spin" /> : <Save size={15} />}
+                            <button className="save-correction" type="button" disabled={!isDirty || savingJobId === key} onClick={() => void saveCorrection(job)}>
+                              {savingJobId === key ? <RefreshCw size={15} className="spin" /> : <Save size={15} />}
                               <span>Αποθήκευση</span>
                             </button>
                           </div>
                           ) : (
                             <div className="job-card-footer">
                               <span>Κατηγορία: <strong>{job.categoryName || 'Χωρίς αντιστοίχιση'}</strong></span>
-                              <button type="button" className="edit-points-link" onClick={() => setEditingJobId(job.orderId)}>Επεξεργασία πόντων <Pencil size={12} /></button>
+                              <button type="button" className="edit-points-link" onClick={() => setEditingJobId(key)}>Επεξεργασία πόντων <Pencil size={12} /></button>
                             </div>
                           )}
                         </>
