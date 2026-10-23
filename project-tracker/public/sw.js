@@ -1,9 +1,11 @@
-const CACHE_NAME = 'fiona-team-tracker-v1';
+const CACHE_NAME = 'fiona-team-tracker-v2';
 const APP_SHELL = [
   '/tracker/',
   '/tracker/index.html',
   '/tracker/manifest.webmanifest',
   '/tracker/tracker-icon.svg',
+  '/tracker/tracker-icon-192.png',
+  '/tracker/tracker-icon-512.png',
 ];
 
 self.addEventListener('install', (event) => {
