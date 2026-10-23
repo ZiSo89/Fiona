@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { normalizeSearchText } from './searchUtils.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
 const COMPLETE_SECTION_KEY = 'fiona-complete-section';
@@ -113,6 +114,7 @@ function TicketDetails({ orderId, storeId }) {
     ['Αρχή - ώρα', scheduledTime],
     ['Ολοκλήρωση - ημερομηνία', closedDate],
     ['Ολοκλήρωση - ώρα', closedTime],
+    ['Τελευταίο σχόλιο', text(ticket.lastComment)],
   ];
 
   const copyOne = async (label, value) => {
@@ -178,17 +180,16 @@ function ClosedItem({ ticket, storeName }) {
   );
 }
 
-function ClosedList({ tickets, stores }) {
-  const [query, setQuery] = useState('');
-  const needle = query.trim().toLocaleLowerCase();
+function ClosedList({ tickets, stores, query, onQueryChange, showSearch }) {
+  const needle = normalizeSearchText(query.trim());
   const visible = needle
     ? tickets.filter((ticket) => [ticket.serviceOrderId, ticket.customer, ticket.address, ticket.service, ticket.team]
-      .some((value) => String(value ?? '').toLocaleLowerCase().includes(needle)))
+      .some((value) => normalizeSearchText(value).includes(needle)))
     : tickets;
 
   return (
     <section className="stats-section">
-      <input className="list-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Αναζήτηση πελάτη, διεύθυνσης ή εισιτηρίου" aria-label="Αναζήτηση ολοκληρωμένων" />
+      {!showSearch && <input className="list-search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Αναζήτηση πελάτη, διεύθυνσης ή εισιτηρίου" aria-label="Αναζήτηση ολοκληρωμένων" list="closed-ticket-suggestions" />}
       {visible.length === 0 && <p className="empty-state">Δεν βρέθηκαν εργασίες.</p>}
       {visible.map((ticket) => <ClosedItem
         key={`${ticket.storeId}:${ticket.orderId}`}
@@ -232,7 +233,7 @@ function StatsSections({ stats, stores }) {
   );
 }
 
-export default function CompleteView({ storeId, stores }) {
+export default function CompleteView({ storeId, stores, searchQuery, onSearchChange, showSearch }) {
   const [month, setMonth] = useState(readCompleteMonth);
   const [section, setSection] = useState(readCompleteSection);
   const [stats, setStats] = useState(null);
@@ -245,6 +246,10 @@ export default function CompleteView({ storeId, stores }) {
   useEffect(() => {
     window.sessionStorage.setItem(COMPLETE_MONTH_KEY, month);
   }, [month]);
+
+  useEffect(() => {
+    if (searchQuery.trim()) setSection('list');
+  }, [searchQuery]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -267,6 +272,14 @@ export default function CompleteView({ storeId, stores }) {
         <button type="button" aria-label="Επόμενος μήνας" disabled={isCurrent} onClick={() => setMonth(shiftMonth(month, 1))}>›</button>
       </div>
 
+      <label className="view-select-wrap">
+        <span>Προβολή</span>
+        <select aria-label="Προβολή ολοκληρωμένων" value={section} onChange={(event) => setSection(event.target.value)}>
+          <option value="list">Ολοκληρωμένα</option>
+          <option value="stats">Στατιστικά</option>
+        </select>
+      </label>
+
       <div className="view-switch" role="tablist" aria-label="Προβολή ολοκληρωμένων">
         <button type="button" role="tab" aria-selected={section === 'list'} className={section === 'list' ? 'active' : ''} onClick={() => setSection('list')}>Ολοκληρωμένα</button>
         <button type="button" role="tab" aria-selected={section === 'stats'} className={section === 'stats' ? 'active' : ''} onClick={() => setSection('stats')}>Στατιστικά</button>
@@ -275,8 +288,15 @@ export default function CompleteView({ storeId, stores }) {
       {error && <p className="empty-state">Δεν φορτώθηκαν τα δεδομένα. Ελέγξτε ότι το backend τρέχει.</p>}
       {!stats && !error && <div className="kpi-grid" aria-busy="true">{[0, 1, 2, 3].map((slot) => <div key={slot} className="kpi skeleton-kpi" />)}</div>}
       {stats && stats.totals.total === 0 && <p className="empty-state">Δεν υπάρχουν κλεισμένες εργασίες αυτόν τον μήνα.</p>}
+      {stats && <datalist id="closed-ticket-suggestions">{[...new Set(stats.closedTickets.flatMap((ticket) => [
+        ticket.serviceOrderId,
+        ticket.customer,
+        ticket.address,
+        ticket.service,
+        ticket.team,
+      ].filter(Boolean).map(String)))].map((suggestion) => <option key={suggestion} value={suggestion} />)}</datalist>}
       {stats && stats.totals.total > 0 && (section === 'list'
-        ? <ClosedList tickets={stats.closedTickets} stores={stores} />
+        ? <ClosedList tickets={stats.closedTickets} stores={stores} query={searchQuery} onQueryChange={onSearchChange} showSearch={showSearch} />
         : <StatsSections stats={stats} stores={stores} />)}
     </main>
   );

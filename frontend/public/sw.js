@@ -1,11 +1,12 @@
-const CACHE_NAME = 'fiona-dispatch-v6';
+const APP_BASE = '/app';
+const CACHE_NAME = 'fiona-dispatch-v14';
 const APP_SHELL = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/alpha-logo.webp',
-  '/icons/fiona-192.svg',
-  '/icons/fiona-512.svg',
+  `${APP_BASE}/`,
+  `${APP_BASE}/index.html`,
+  `${APP_BASE}/manifest.webmanifest`,
+  `${APP_BASE}/icon.svg`,
+  `${APP_BASE}/icons/fiona-192.png?v=14`,
+  `${APP_BASE}/icons/fiona-512.png?v=14`,
 ];
 
 self.addEventListener('install', (event) => {
@@ -26,28 +27,32 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith('/api/')) return;
+  if (requestUrl.pathname === '/tracker' || requestUrl.pathname.startsWith('/tracker/')) return;
+  if (requestUrl.pathname !== APP_BASE && !requestUrl.pathname.startsWith(`${APP_BASE}/`)) return;
 
-  const isViteModule = requestUrl.pathname.startsWith('/src/')
-    || requestUrl.pathname.startsWith('/@')
-    || requestUrl.pathname.startsWith('/node_modules/');
+  const isViteModule = requestUrl.pathname.startsWith(`${APP_BASE}/src/`)
+    || requestUrl.pathname.startsWith(`${APP_BASE}/@`)
+    || requestUrl.pathname.startsWith(`${APP_BASE}/node_modules/`);
   if (isViteModule) {
     event.respondWith(fetch(event.request));
     return;
   }
 
   const isAppDocument = event.request.mode === 'navigate'
-    || requestUrl.pathname === '/'
-    || requestUrl.pathname === '/index.html';
+    || requestUrl.pathname === APP_BASE
+    || requestUrl.pathname === `${APP_BASE}/`
+    || requestUrl.pathname === `${APP_BASE}/index.html`;
   if (isAppDocument) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {
           if (response?.status === 200 && response.type === 'basic') {
-            caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', response.clone()));
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(`${APP_BASE}/index.html`, copy));
           }
           return response;
         })
-        .catch(() => caches.match(event.request).then((cached) => cached || caches.match('/index.html')))
+        .catch(() => caches.match(event.request).then((cached) => cached || caches.match(`${APP_BASE}/index.html`)))
     );
     return;
   }
@@ -66,7 +71,7 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, cloned));
           return response;
         })
-        .catch(() => caches.match('/index.html'));
+        .catch(() => caches.match(`${APP_BASE}/index.html`));
     })
   );
 });
