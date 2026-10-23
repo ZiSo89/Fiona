@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAuth } from '../src/auth.js';
+import { createAuth } from '../src/middleware/auth.js';
 
 function call(handler, req) {
   const res = { headers: {}, statusCode: 200, body: null };

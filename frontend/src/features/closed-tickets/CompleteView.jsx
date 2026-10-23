@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { normalizeSearchText } from './searchUtils.js';
+import { normalizeSearchText } from '../../shared/searchUtils.js';
 
 const MONTHS = ['Ιανουάριος', 'Φεβρουάριος', 'Μάρτιος', 'Απρίλιος', 'Μάιος', 'Ιούνιος', 'Ιούλιος', 'Αύγουστος', 'Σεπτέμβριος', 'Οκτώβριος', 'Νοέμβριος', 'Δεκέμβριος'];
 const COMPLETE_SECTION_KEY = 'fiona-complete-section';

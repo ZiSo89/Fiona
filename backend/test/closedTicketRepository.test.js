@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { createClosedTicketRepository } from '../src/services/closedTicketRepository.js';
-import { createTicketObservationRepository } from '../src/services/ticketObservationRepository.js';
+import { createClosedTicketRepository } from '../src/repositories/closedTicketRepository.js';
+import { createTicketObservationRepository } from '../src/repositories/ticketObservationRepository.js';
 
 const record = {
   order_id: '123',

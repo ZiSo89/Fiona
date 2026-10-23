@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { createClosedTicketRepository } from '../src/services/closedTicketRepository.js';
+import { createClosedTicketRepository } from '../src/repositories/closedTicketRepository.js';
 import { createClosedTicketFinalizer } from '../src/services/closedTicketFinalizer.js';
 
 const openTicket = { id: '77', serviceOrderId: 'PS1-1', dispatch: { assignedTeam: 'Team A' } };

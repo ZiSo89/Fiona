@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parseArgs } from '../src/cli/syncClosedTickets.js';
-import { createClosedTicketRepository } from '../src/services/closedTicketRepository.js';
+import { createClosedTicketRepository } from '../src/repositories/closedTicketRepository.js';
 import { listDateRange, parseDateRangeValue, syncClosedTickets } from '../src/services/closedTicketSync.js';
 
 function createOrder(orderId) {

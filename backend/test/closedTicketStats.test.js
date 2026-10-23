@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createClosedTicketRepository } from '../src/services/closedTicketRepository.js';
-import { createTicketObservationRepository } from '../src/services/ticketObservationRepository.js';
+import { createClosedTicketRepository } from '../src/repositories/closedTicketRepository.js';
+import { createTicketObservationRepository } from '../src/repositories/ticketObservationRepository.js';
 import { athensMonthOf, buildMonthlyStats, getClosedTicketDetails } from '../src/services/closedTicketStats.js';
 
 const row = (orderId, team, closedAt, dueAt, outcome) => ({

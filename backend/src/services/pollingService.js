@@ -1,8 +1,8 @@
 import { FionaClient } from './fionaClient.js';
 import { normalizeOrders } from './orderNormalizer.js';
 import { config } from '../config.js';
-import { createTicketObservationRepository } from './ticketObservationRepository.js';
-import { createClosedTicketRepository } from './closedTicketRepository.js';
+import { createTicketObservationRepository } from '../repositories/ticketObservationRepository.js';
+import { createClosedTicketRepository } from '../repositories/closedTicketRepository.js';
 import { createClosedTicketFinalizer } from './closedTicketFinalizer.js';
 
 export function createPollingService(client, pollIntervalMs, onTickets = () => {}, store = client.config || {}) {

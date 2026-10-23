@@ -2,12 +2,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
 import { config } from '../config.js';
-import { athensMonthOf } from './closedTicketStats.js';
+import { athensMonthOf } from '../services/closedTicketStats.js';
 import {
   getProjectTrackerCategory,
   mapProjectTrackerCategory,
   projectTrackerJobFromRow,
-} from './projectTrackerCatalog.js';
+} from '../services/projectTrackerCatalog.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const dayFormatter = new Intl.DateTimeFormat('en-CA', {

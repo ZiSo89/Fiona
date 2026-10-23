@@ -1,7 +1,7 @@
 import express from 'express';
-import { athensMonthOf } from './closedTicketStats.js';
-import { getProjectTrackerCategory } from './projectTrackerCatalog.js';
-import { buildProjectTrackerMonth } from './projectTrackerStats.js';
+import { athensMonthOf } from '../services/closedTicketStats.js';
+import { getProjectTrackerCategory } from '../services/projectTrackerCatalog.js';
+import { buildProjectTrackerMonth } from '../services/projectTrackerStats.js';
 
 function scopeFromQuery(req, res) {
   const storeId = String(req.query.storeId ?? '').trim() || null;
@@ -13,7 +13,7 @@ function scopeFromQuery(req, res) {
   return { storeId, teamName };
 }
 
-export function createProjectTrackerApi({ repository, auth, stores = [], getEditorDetails = async () => null }) {
+export function createProjectTrackerRoutes({ repository, auth, stores = [], getEditorDetails = async () => null }) {
   const router = express.Router();
   const storeNames = Object.fromEntries(stores.map((store) => [store.storeId, store.storeName]));
 

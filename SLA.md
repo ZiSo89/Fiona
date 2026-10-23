@@ -89,4 +89,4 @@ on_time / (on_time + late) * 100
 
 - `backend/src/services/closedTicketSla.js`: δημιουργία εγγραφής ολοκληρωμένου ticket και έκβαση SLA.
 - `backend/src/services/closedTicketStats.js`: μηνιαία ομαδοποίηση, ποσοστά και καθυστερήσεις.
-- `backend/src/services/ticketObservationRepository.js`: καταγραφή παρατηρήσεων και έκβαση πρώτης κλήσης.
+- `backend/src/repositories/ticketObservationRepository.js`: καταγραφή παρατηρήσεων και έκβαση πρώτης κλήσης.

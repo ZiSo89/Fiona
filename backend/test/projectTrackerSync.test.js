@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createProjectTrackerRepository } from '../src/services/projectTrackerRepository.js';
+import { createProjectTrackerRepository } from '../src/repositories/projectTrackerRepository.js';
 import { syncProjectTracker } from '../src/services/projectTrackerSync.js';
 
 async function withRepository(run) {

@@ -50,6 +50,36 @@ Mobile-first εφαρμογή PWA για την καθημερινή διαχε�
 
 Για προστασία του `main`, ενεργοποίησε στο GitHub ruleset ή branch protection: απαίτηση Pull Request, απαίτηση επιτυχίας των `Backend tests`, `Frontend build` και `Tracker build`, απαγόρευση force push και διαγραφής branch. Αυτές οι ρυθμίσεις γίνονται χειροκίνητα στο GitHub και δεν ενεργοποιούνται από το workflow.
 
+### Δομή κώδικα
+
+Το backend οργανώνεται σε επίπεδα με σαφή ευθύνη. Οι εξαρτήσεις πηγαίνουν προς μία κατεύθυνση: `routes` → `controllers` → `services` → `repositories`.
+
+```text
+backend/src/
+  server.js        εκκίνηση: listen, polling και tracker sync
+  app.js           σύνθεση Express app, middleware και routes
+  config.js        ρυθμίσεις από το περιβάλλον
+  routes/          ορισμός endpoints (/api/tickets, /api/closed-tickets, /api/tracker, στατικά apps)
+  controllers/     χειρισμός request/response, επικύρωση παραμέτρων
+  middleware/      auth και session έλεγχοι
+  services/        επιχειρησιακή λογική (Fiona client, polling, SLA, στατιστικά, sync)
+  repositories/    πρόσβαση στη SQLite
+  cli/             εντολές γραμμής εντολών (sync:closed)
+```
+
+```text
+frontend/src/
+  main.jsx, App.jsx, styles.css
+  components/      κοινά UI στοιχεία (Icon)
+  shared/          βοηθητικές συναρτήσεις χωρίς εξάρτηση από feature
+  features/
+    auth/            AuthGate
+    tickets/         κάρτα εισιτηρίου, μοντέλο/SLA, formatters, τοπική αποθήκευση, demo δεδομένα
+    closed-tickets/  προβολή ολοκληρωμένων και στατιστικών
+```
+
+Νέο endpoint: πρόσθεσε controller στο `controllers/`, route στο `routes/` και σύνδεσέ το στο `app.js`. Νέα λειτουργία διεπαφής: δημιούργησε φάκελο στο `frontend/src/features/`.
+
 ### Αρχιτεκτονική
 
 - `frontend/`: React 18, Vite και PWA service worker στο `/app/`. Η ρίζα `/` ανακατευθύνει στο `/app/`, ενώ η διεπαφή ζητά δεδομένα από το ίδιο origin μέσω `/api/*`. Το production build βρίσκεται στο `frontend/dist`.
