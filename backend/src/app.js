@@ -23,6 +23,7 @@ export function createApp() {
   const projectTrackerRepository = createProjectTrackerRepository(config.closedTicketsDbPath);
   const projectTrackerAuth = createProjectTrackerAuth({
     teamPasswords: config.projectTrackerTeamPasswords,
+    adminPassword: config.projectTrackerAdminPassword,
     sessionSecret: config.projectTrackerSessionSecret,
   });
 

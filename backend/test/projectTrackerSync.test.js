@@ -35,6 +35,7 @@ test('imports only Fiona-completed jobs after cutover and deduplicates repeat sy
           workOrderFinishedOnPremiseTime: '2026-10-18T10:00:00.000Z',
           serviceGroup: 'ALEXANDROUPOLI 395',
           orderType: 'FTTH Installation',
+          categoryId06: '5.10 Visit OK, Delivery OK',
         };
       },
     };
@@ -155,5 +156,116 @@ test('sync applies new exact mappings to existing pending rows before polling', 
     });
     assert.equal(summary.remappedExisting, 1);
     assert.equal(repository.getJob('alexandroupoli', 'existing-nga').points, 50);
+  });
+});
+
+test('applies the 5.8.5 score rule to existing jobs while preserving manual category corrections', async () => {
+  await withRepository(async (repository) => {
+    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    repository.insertJob({
+      storeId: 'alexandroupoli',
+      orderId: 'existing-corrected',
+      teamName: 'Team One',
+      closedAt: '2026-05-18T10:00:00.000Z',
+      sourceLabel: 'FTTH Installation',
+      categoryId: 'ftth_installation',
+      pointsOverride: 15,
+      sourceCategoryId: 'PaSPort|INSTALLATION|NGA Activation|5.8.5',
+      importedAt: '2026-10-18T11:00:00.000Z',
+    });
+    repository.correctJob({
+      storeId: 'alexandroupoli',
+      orderId: 'existing-corrected',
+      teamName: 'Team One',
+      categoryId: 'ftth_installation',
+      changedAt: '2026-10-18T11:30:00.000Z',
+    });
+    const client = {
+      async dailyWorkorders() { return []; },
+      async orderDetails() {
+        return { categoryId06: '5.8.5' };
+      },
+      async fetchLatestCommentWithSession() {
+        return { text: 'Η ΟΔΕΥΣΗ ΕΓΙΝΕ.' };
+      },
+    };
+    const summary = await syncProjectTracker({
+      stores: [store],
+      clients: new Map([['alexandroupoli', client]]),
+      repository,
+      lookbackDays: 1,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      wait: async () => {},
+      now: () => new Date('2026-10-18T12:00:00.000Z'),
+    });
+
+    assert.equal(summary.updatedExisting, 1);
+    assert.equal(repository.getJob('alexandroupoli', 'existing-corrected').points, 50);
+    assert.equal(repository.getJob('alexandroupoli', 'existing-corrected').categoryId, 'ftth_installation');
+  });
+});
+
+test('5.8.5 scores 15 without either routing phrase; 5.10 stays at 50', async () => {
+  await withRepository(async (repository) => {
+    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    repository.insertJob({
+      storeId: 'alexandroupoli',
+      orderId: 'existing-visit-ok',
+      teamName: 'Team One',
+      closedAt: '2026-10-18T10:00:00.000Z',
+      sourceLabel: 'FTTH Installation',
+      sourceCategoryId: 'PaSPort|INSTALLATION|NGA Activation|5.10 Visit OK, Delivery OK',
+      categoryId: 'ftth_installation',
+      pointsOverride: 15,
+      importedAt: '2026-10-18T11:00:00.000Z',
+    });
+    const imported = [];
+    const comments = {
+      'no-routing': 'Δεν ολοκληρώθηκε η εργασία.',
+      'reverse-routing': 'ΕΓΙΝΕ όδευση.',
+    };
+    const client = {
+      async dailyWorkorders() {
+        return [
+          { orderId: 'existing-visit-ok', Categorization: { categoryId06: '5.10 Visit OK, Delivery OK' } },
+          { orderId: 'no-routing', teamName: 'Team One', orderType: 'FTTH Installation' },
+          { orderId: 'reverse-routing', teamName: 'Team One', orderType: 'FTTH Installation' },
+          { orderId: 'visit-ok', teamName: 'Team One', orderType: 'FTTH Installation' },
+        ];
+      },
+      async orderDetails(orderId) {
+        return {
+          orderId,
+          orderStatus: 'COMPLETED',
+          workOrderFinishedOnPremiseTime: '2026-10-18T10:00:00.000Z',
+          serviceGroup: 'ALEXANDROUPOLI 395',
+          orderType: 'FTTH Installation',
+          categoryId06: ['existing-visit-ok', 'visit-ok'].includes(orderId)
+            ? '5.10 Visit OK, Delivery OK'
+            : '5.8.5',
+        };
+      },
+      async fetchLatestCommentWithSession(orderId) {
+        imported.push(orderId);
+        return { text: comments[orderId] };
+      },
+    };
+    await syncProjectTracker({
+      stores: [store],
+      clients: new Map([['alexandroupoli', client]]),
+      repository,
+      lookbackDays: 1,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      wait: async () => {},
+      now: () => new Date('2026-10-18T12:00:00.000Z'),
+    });
+
+    assert.equal(repository.getJob('alexandroupoli', 'no-routing').points, 15);
+    assert.equal(repository.getJob('alexandroupoli', 'reverse-routing').points, 50);
+    assert.equal(repository.getJob('alexandroupoli', 'visit-ok').points, 50);
+    assert.equal(repository.getJob('alexandroupoli', 'existing-visit-ok').points, 50);
+    assert.deepEqual(imported, ['no-routing', 'reverse-routing']);
   });
 });

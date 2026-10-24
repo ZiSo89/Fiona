@@ -75,6 +75,81 @@ test('unmapped jobs remain unscored and corrections are audited', () => {
   });
 });
 
+test('changing a manually corrected category clears its previous score override', () => {
+  withRepository((repository) => {
+    repository.insertJob(job({ pointsOverride: 15 }));
+    const corrected = repository.correctJob({
+      storeId: 'alexandroupoli',
+      orderId: 'order-1',
+      teamName: 'Team One',
+      categoryId: 'dth_tv_impairment',
+      changedAt: '2026-10-18T11:00:00.000Z',
+    });
+    assert.equal(corrected.points, 18);
+    assert.equal(corrected.pointsOverride, null);
+  });
+});
+
+test('monthly payment lock prevents team corrections but permits admin corrections', () => {
+  withRepository((repository) => {
+    repository.insertJob(job());
+    const lock = repository.setMonthLock({
+      storeId: 'alexandroupoli',
+      teamName: 'Team One',
+      month: '2026-10',
+      locked: true,
+      changedAt: '2026-10-18T12:00:00.000Z',
+    });
+    assert.deepEqual(lock, { locked: true, changedAt: '2026-10-18T12:00:00.000Z' });
+    assert.equal(repository.getMonthLock('alexandroupoli', 'Team One', '2026-11').locked, false);
+    assert.equal(repository.getMonthLock('alexandroupoli', 'Other Team', '2026-10').locked, false);
+
+    assert.throws(() => repository.correctJob({
+      storeId: 'alexandroupoli',
+      orderId: 'order-1',
+      teamName: 'Team One',
+      categoryId: 'dth_tv_impairment',
+      changedAt: '2026-10-18T13:00:00.000Z',
+    }), { code: 'PROJECT_TRACKER_MONTH_LOCKED' });
+
+    const corrected = repository.correctJob({
+      storeId: 'alexandroupoli',
+      orderId: 'order-1',
+      teamName: 'Team One',
+      categoryId: 'dth_tv_impairment',
+      allowLocked: true,
+      changedAt: '2026-10-18T14:00:00.000Z',
+    });
+    assert.equal(corrected.points, 18);
+    assert.equal(repository.setMonthLock({
+      storeId: 'alexandroupoli',
+      teamName: 'Team One',
+      month: '2026-10',
+      locked: false,
+      changedAt: '2026-10-18T15:00:00.000Z',
+    }).locked, false);
+  });
+});
+
+test('system scoring updates preserve manual category assignments and are audited', () => {
+  withRepository((repository) => {
+    repository.insertJob(job({ categoryId: 'dth_tv_impairment', pointsOverride: 21 }));
+    assert.equal(repository.updateJobScoring(
+      'alexandroupoli',
+      'order-1',
+      15,
+      '2026-10-18T12:00:00.000Z',
+      'PaSPort|5.8.5',
+      1,
+    ), true);
+    const corrected = repository.getJob('alexandroupoli', 'order-1');
+    assert.equal(corrected.categoryId, 'dth_tv_impairment');
+    assert.equal(corrected.points, 15);
+    assert.equal(repository.getAudit('alexandroupoli', 'order-1')[0].editorTeam, 'SYSTEM:SCORING_RULE');
+    assert.equal(corrected.sourceCategoryId, 'PaSPort|5.8.5');
+  });
+});
+
 test('exact category-map tokens remap existing pending jobs once and record a system audit', () => {
   withRepository((repository) => {
     repository.insertJob(job({

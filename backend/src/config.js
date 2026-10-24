@@ -71,6 +71,7 @@ export const config = {
   appPassword: process.env.APP_PASSWORD || '',
   projectTrackerSessionSecret: process.env.PROJECT_TRACKER_SESSION_SECRET || process.env.APP_PASSWORD || '',
   projectTrackerTeamPasswords: parseObject(process.env.PROJECT_TRACKER_TEAM_PASSWORDS),
+  projectTrackerAdminPassword: process.env.PROJECT_TRACKER_ADMIN_PASSWORD || '',
   projectTrackerCategoryMap: parseObject(process.env.PROJECT_TRACKER_CATEGORY_MAP),
   projectTrackerSyncIntervalMs: Number(process.env.PROJECT_TRACKER_SYNC_INTERVAL_MS || 900000),
   projectTrackerLookbackDays: Number(process.env.PROJECT_TRACKER_LOOKBACK_DAYS || 14),

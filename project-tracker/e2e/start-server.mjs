@@ -11,6 +11,7 @@ process.env.PORT = process.env.E2E_PORT || '4100';
 process.env.CLOSED_TICKETS_DB_PATH = dbPath;
 process.env.PROJECT_TRACKER_SESSION_SECRET = 'e2e-secret';
 process.env.PROJECT_TRACKER_TEAM_PASSWORDS = JSON.stringify({ 'alexandroupoli|Team One': 'team-secret' });
+process.env.PROJECT_TRACKER_ADMIN_PASSWORD = 'admin-secret';
 process.env.FIONA_ALEXANDROUPOLI_USERNAME = '';
 process.env.FIONA_KOMOTINI_USERNAME = '';
 process.env.FIONA_ORESTIADA_USERNAME = '';

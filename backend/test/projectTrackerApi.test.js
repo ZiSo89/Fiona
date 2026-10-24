@@ -20,6 +20,7 @@ async function withApi(run) {
   const auth = createProjectTrackerAuth({
     sessionSecret: 'test-secret',
     teamPasswords: { [projectTrackerEditorKey('alexandroupoli', 'Team One')]: 'team-secret' },
+    adminPassword: 'admin-secret',
   });
   const app = express();
   app.use(express.json());
@@ -107,6 +108,66 @@ test('corrections require a team session and stay scoped to its store/team', asy
     });
     assert.equal(corrected.status, 200);
     assert.equal((await corrected.json()).job.points, 18);
+  });
+});
+
+test('only admins can lock a payment month; team editors cannot correct it afterward', async () => {
+  await withApi(async (url) => {
+    const editorLogin = await fetch(`${url}/api/tracker/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ storeId: 'alexandroupoli', teamName: 'Team One', password: 'team-secret' }),
+    });
+    const editorCookie = editorLogin.headers.get('set-cookie').split(';')[0];
+
+    const deniedLock = await fetch(`${url}/api/tracker/month-lock`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie: editorCookie },
+      body: JSON.stringify({
+        storeId: 'alexandroupoli', teamName: 'Team One', month: '2026-10', locked: true,
+      }),
+    });
+    assert.equal(deniedLock.status, 403);
+
+    const adminLogin = await fetch(`${url}/api/tracker/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ role: 'admin', password: 'admin-secret' }),
+    });
+    const adminCookie = adminLogin.headers.get('set-cookie').split(';')[0];
+    assert.deepEqual((await adminLogin.json()).editor, { role: 'admin' });
+
+    const locked = await fetch(`${url}/api/tracker/month-lock`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify({
+        storeId: 'alexandroupoli', teamName: 'Team One', month: '2026-10', locked: true,
+      }),
+    });
+    assert.equal(locked.status, 200);
+    assert.equal((await locked.json()).paymentLock.locked, true);
+
+    const month = await fetch(`${url}/api/tracker/month?month=2026-10&storeId=alexandroupoli&teamName=Team%20One`, {
+      headers: { cookie: editorCookie },
+    }).then((response) => response.json());
+    assert.equal(month.paymentLock.locked, true);
+
+    const correction = {
+      storeId: 'alexandroupoli', teamName: 'Team One', categoryId: 'dth_tv_impairment', pointsOverride: null,
+    };
+    const blockedCorrection = await fetch(`${url}/api/tracker/jobs/order-1`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie: editorCookie },
+      body: JSON.stringify(correction),
+    });
+    assert.equal(blockedCorrection.status, 409);
+
+    const adminCorrection = await fetch(`${url}/api/tracker/jobs/order-1`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie: adminCookie },
+      body: JSON.stringify(correction),
+    });
+    assert.equal(adminCorrection.status, 200);
   });
 });
 

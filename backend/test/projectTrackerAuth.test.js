@@ -27,13 +27,30 @@ test('editor session is scoped to its store and team', () => {
   const authorizedRequest = request({ headers: { cookie } });
   const authorized = call(auth.requireAuth, authorizedRequest);
   assert.equal(authorized.nextCalled, true);
-  assert.deepEqual(authorizedRequest.trackerEditor, { storeId: 'alexandroupoli', teamName: 'Team One' });
+  assert.deepEqual(authorizedRequest.trackerEditor, { role: 'editor', storeId: 'alexandroupoli', teamName: 'Team One' });
 
   const session = call(auth.session, request({ headers: { cookie } }));
-  assert.equal(session.body.editor.storeId, 'alexandroupoli');
-  assert.equal(session.body.editor.teamName, 'Team One');
+  assert.deepEqual(session.body.editor, { role: 'editor', storeId: 'alexandroupoli', teamName: 'Team One' });
   assert.equal(call(auth.login, request({ body: { storeId: 'komotini', teamName: 'Team One', password: 'team-secret' } })).statusCode, 401);
   assert.equal(call(auth.requireAuth, request()).statusCode, 401);
+});
+
+test('admin session is global and distinct from team editor sessions', () => {
+  const auth = createProjectTrackerAuth({
+    teamPasswords: passwords,
+    adminPassword: 'admin-secret',
+    sessionSecret: 'signing-secret',
+  });
+  assert.equal(call(auth.login, request({ body: { role: 'admin', password: 'team-secret' } })).statusCode, 401);
+  const login = call(auth.login, request({ body: { role: 'admin', password: 'admin-secret' } }));
+  assert.equal(login.statusCode, 200);
+  assert.deepEqual(login.body.editor, { role: 'admin' });
+
+  const cookie = login.headers['Set-Cookie'].split(';')[0];
+  const authorizedRequest = request({ headers: { cookie } });
+  assert.equal(call(auth.requireAuth, authorizedRequest).nextCalled, true);
+  assert.deepEqual(authorizedRequest.trackerEditor, { role: 'admin' });
+  assert.deepEqual(call(auth.session, request({ headers: { cookie } })).body.editor, { role: 'admin' });
 });
 
 test('wrong passwords are rate limited and missing signing secret disables editors', () => {

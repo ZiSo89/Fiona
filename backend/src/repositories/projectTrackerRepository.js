@@ -59,12 +59,21 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
       source_category_id TEXT,
       category_id TEXT,
       points_override INTEGER,
+      scoring_version INTEGER NOT NULL DEFAULT 0,
       imported_at TEXT NOT NULL,
       corrected_at TEXT,
       PRIMARY KEY (store_id, order_id)
     );
     CREATE INDEX IF NOT EXISTS project_tracker_jobs_month_idx
       ON project_tracker_jobs (store_id, team_name, closed_at);
+    CREATE TABLE IF NOT EXISTS project_tracker_month_locks (
+      store_id TEXT NOT NULL,
+      team_name TEXT NOT NULL,
+      month TEXT NOT NULL,
+      locked INTEGER NOT NULL,
+      changed_at TEXT NOT NULL,
+      PRIMARY KEY (store_id, team_name, month)
+    );
     CREATE TABLE IF NOT EXISTS project_tracker_audit (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       store_id TEXT NOT NULL,
@@ -87,16 +96,31 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
     );
   `);
 
+  const jobColumns = new Set(database.prepare('PRAGMA table_info(project_tracker_jobs)').all().map((column) => column.name));
+  if (!jobColumns.has('scoring_version')) {
+    database.exec('ALTER TABLE project_tracker_jobs ADD COLUMN scoring_version INTEGER NOT NULL DEFAULT 0');
+  }
+
   const insertJob = database.prepare(`
     INSERT OR IGNORE INTO project_tracker_jobs (
       store_id, order_id, team_name, closed_at, source_label, source_category_id,
-      category_id, points_override, imported_at
+      category_id, points_override, scoring_version, imported_at
     ) VALUES (
       @storeId, @orderId, @teamName, @closedAt, @sourceLabel, @sourceCategoryId,
-      @categoryId, NULL, @importedAt
+      @categoryId, @pointsOverride, @scoringVersion, @importedAt
     )
   `);
   const jobById = database.prepare('SELECT * FROM project_tracker_jobs WHERE store_id = ? AND order_id = ?');
+  const monthLockById = database.prepare(`
+    SELECT locked, changed_at AS changedAt FROM project_tracker_month_locks
+    WHERE store_id = ? AND team_name = ? AND month = ?
+  `);
+  const upsertMonthLock = database.prepare(`
+    INSERT INTO project_tracker_month_locks (store_id, team_name, month, locked, changed_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(store_id, team_name, month) DO UPDATE SET
+      locked = excluded.locked, changed_at = excluded.changed_at
+  `);
   const listScopedJobs = database.prepare(`
     SELECT * FROM project_tracker_jobs
     WHERE closed_at >= ? AND closed_at < ?
@@ -104,7 +128,12 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
   `);
   const updateJob = database.prepare(`
     UPDATE project_tracker_jobs
-    SET category_id = ?, points_override = ?, corrected_at = ?
+    SET category_id = ?, points_override = ?, corrected_at = ?, scoring_version = ?
+    WHERE store_id = ? AND order_id = ?
+  `);
+  const updateJobScoring = database.prepare(`
+    UPDATE project_tracker_jobs
+    SET points_override = ?, source_category_id = COALESCE(?, source_category_id), scoring_version = ?
     WHERE store_id = ? AND order_id = ?
   `);
   const insertAudit = database.prepare(`
@@ -134,13 +163,26 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
   const correctJobTransaction = database.transaction((job, correction) => {
     const previous = jobById.get(correction.storeId, correction.orderId);
     if (!previous || previous.team_name !== correction.teamName) return null;
+    if (!correction.allowLocked && monthLockById.get(
+      correction.storeId,
+      correction.teamName,
+      athensMonthOf(previous.closed_at),
+    )?.locked) {
+      const error = new Error('This month is locked for payment');
+      error.code = 'PROJECT_TRACKER_MONTH_LOCKED';
+      throw error;
+    }
+    const pointsOverride = correction.pointsOverride === undefined
+      ? (previous.category_id === correction.categoryId ? previous.points_override : null)
+      : correction.pointsOverride;
     if (previous.category_id === correction.categoryId
-      && previous.points_override === correction.pointsOverride) return projectTrackerJobFromRow(previous);
+      && previous.points_override === pointsOverride) return projectTrackerJobFromRow(previous);
 
     updateJob.run(
       correction.categoryId,
-      correction.pointsOverride,
+      pointsOverride,
       correction.changedAt,
+      previous.category_id === correction.categoryId ? previous.scoring_version : 0,
       correction.storeId,
       correction.orderId,
     );
@@ -151,10 +193,40 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
       previous.category_id,
       correction.categoryId,
       previous.points_override,
-      correction.pointsOverride,
+      pointsOverride,
       correction.changedAt,
     );
     return projectTrackerJobFromRow(jobById.get(correction.storeId, correction.orderId));
+  });
+  const updateJobScoringTransaction = database.transaction((storeId, orderId, pointsOverride, sourceCategoryId, changedAt, scoringVersion) => {
+    const previous = jobById.get(storeId, orderId);
+    if (!previous) return false;
+
+    const pointsChanged = previous.points_override !== pointsOverride;
+    const sourceCategoryChanged = sourceCategoryId && previous.source_category_id !== sourceCategoryId;
+    const versionChanged = previous.scoring_version !== scoringVersion;
+    if (!pointsChanged && !sourceCategoryChanged && !versionChanged) return false;
+
+    updateJobScoring.run(
+      pointsOverride,
+      sourceCategoryId,
+      scoringVersion,
+      storeId,
+      orderId,
+    );
+    if (pointsChanged) {
+      insertAudit.run(
+        storeId,
+        orderId,
+        'SYSTEM:SCORING_RULE',
+        previous.category_id,
+        previous.category_id,
+        previous.points_override,
+        pointsOverride,
+        changedAt,
+      );
+    }
+    return pointsChanged;
   });
   const applyCategoryMapTransaction = database.transaction((categoryMap, changedAt) => {
     let remapped = 0;
@@ -162,7 +234,7 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
       const categoryTokens = String(row.source_category_id ?? '').split('|').map((token) => token.trim()).filter(Boolean);
       const category = mapProjectTrackerCategory(categoryMap, row.source_label, ...categoryTokens);
       if (!category) continue;
-      updateJob.run(category.id, row.points_override, changedAt, row.store_id, row.order_id);
+      updateJob.run(category.id, row.points_override, changedAt, 0, row.store_id, row.order_id);
       insertAudit.run(
         row.store_id,
         row.order_id,
@@ -198,14 +270,51 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
     insertJob(job) {
       if (!job.storeId || !job.orderId || !job.teamName || !job.closedAt || !job.importedAt) return false;
       if (job.categoryId && !getProjectTrackerCategory(job.categoryId)) throw new Error('Unknown project tracker category');
-      return insertJob.run(job).changes > 0;
+      return insertJob.run({ pointsOverride: null, scoringVersion: 0, ...job }).changes > 0;
     },
     applyCategoryMap(categoryMap, changedAt = new Date().toISOString()) {
       return applyCategoryMapTransaction(categoryMap, changedAt);
     },
+    getJobsNeedingScoring(scoringVersion) {
+      return database.prepare(`
+        SELECT * FROM project_tracker_jobs
+        WHERE category_id = 'ftth_installation' AND scoring_version < ?
+        ORDER BY closed_at, order_id
+      `).all(scoringVersion).map((row) => ({
+        ...projectTrackerJobFromRow(row),
+        scoringVersion: row.scoring_version,
+      }));
+    },
+    updateJobScoring(storeId, orderId, pointsOverride, changedAt, sourceCategoryId, scoringVersion) {
+      if (pointsOverride !== null
+        && (!Number.isInteger(pointsOverride) || pointsOverride < 0 || pointsOverride > 1000)) {
+        throw new Error('pointsOverride must be an integer from 0 to 1000');
+      }
+      return updateJobScoringTransaction(
+        storeId,
+        orderId,
+        pointsOverride,
+        sourceCategoryId,
+        changedAt,
+        scoringVersion,
+      );
+    },
     getJob(storeId, orderId) {
       const row = jobById.get(storeId, orderId);
       return row ? projectTrackerJobFromRow(row) : null;
+    },
+    getMonthLock(storeId, teamName, month) {
+      const lock = monthLockById.get(storeId, teamName, month);
+      return { locked: Boolean(lock?.locked), changedAt: lock?.changedAt ?? null };
+    },
+    setMonthLock({ storeId, teamName, month, locked, changedAt }) {
+      if (!storeId || !teamName || !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month))) {
+        throw new Error('Invalid month lock scope');
+      }
+      if (typeof locked !== 'boolean') throw new Error('Month lock state must be boolean');
+      upsertMonthLock.run(storeId, teamName, month, locked ? 1 : 0, changedAt);
+      const lock = monthLockById.get(storeId, teamName, month);
+      return { locked: Boolean(lock?.locked), changedAt: lock?.changedAt ?? null };
     },
     getEditorDetailsCache(storeId, orderId) {
       return getEditorDetailsCache.get(storeId, orderId) ?? null;
@@ -256,7 +365,7 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
       if (correction.categoryId !== null && !getProjectTrackerCategory(correction.categoryId)) {
         throw new Error('Unknown project tracker category');
       }
-      if (correction.pointsOverride !== null
+      if (correction.pointsOverride !== undefined && correction.pointsOverride !== null
         && (!Number.isInteger(correction.pointsOverride) || correction.pointsOverride < 0 || correction.pointsOverride > 1000)) {
         throw new Error('pointsOverride must be an integer from 0 to 1000');
       }
