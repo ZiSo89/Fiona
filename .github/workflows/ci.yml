@@ -81,7 +81,17 @@ jobs:
         run: npm ci --prefix backend
       - name: Install tracker dependencies
         run: npm ci --prefix project-tracker
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('project-tracker/package-lock.json') }}
       - name: Install Playwright browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx --prefix project-tracker playwright install --with-deps chromium
+      - name: Install Playwright system dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx --prefix project-tracker playwright install-deps chromium
       - name: Run tracker e2e tests
         run: npm run test:e2e --prefix project-tracker
