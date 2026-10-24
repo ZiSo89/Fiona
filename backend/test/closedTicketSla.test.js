@@ -45,6 +45,21 @@ test('builds a minimal completed-ticket record with customer AFM and independent
   assert.equal('raw_json' in record, false);
 });
 
+test('prefers the assigned team from order details over a generic daily-list team', () => {
+  const record = buildClosedTicketRecord(
+    { orderId: 'team-1', teamName: 'NEW TECHNOLOGIES AT ORESTIADA' },
+    {
+      orderStatus: 'COMPLETED',
+      teamName: 'Nikolaos Katinas',
+      workOrderFinishedOnPremiseTime: '2026-10-14 10:00:00',
+    },
+    { workOrderSlaDate: '2026-10-14 11:00:00' },
+    null,
+  );
+
+  assert.equal(record.team_name, 'Nikolaos Katinas');
+});
+
 test('does not build a record for non-completed or untimestamped orders', () => {
   assert.equal(buildClosedTicketRecord({ orderId: '1', orderStatus: 'POSTPONED' }, {}, {}, null), null);
   assert.equal(buildClosedTicketRecord({ orderId: '2', orderStatus: 'COMPLETED' }, {}, {}, null), null);

@@ -69,6 +69,7 @@ function pendingClosuresTableSql(tableName = 'pending_closures') {
     team_name TEXT,
     first_seen_at TEXT NOT NULL,
     attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z',
     PRIMARY KEY (store_id, order_id)
   )`;
 }
@@ -114,6 +115,7 @@ export function createClosedTicketRepository(dbPath = config.closedTicketsDbPath
       team_name TEXT,
       first_seen_at TEXT NOT NULL,
       attempts INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z',
       PRIMARY KEY (store_id, order_id)
     );
   `);
@@ -172,12 +174,20 @@ export function createClosedTicketRepository(dbPath = config.closedTicketsDbPath
     const migrate = database.transaction(() => {
       database.exec('ALTER TABLE pending_closures RENAME TO pending_closures_legacy');
       database.exec(pendingClosuresTableSql('pending_closures'));
-      database.exec(`INSERT INTO pending_closures (store_id, order_id, service_order_id, team_name, first_seen_at, attempts)
+      database.exec(`INSERT INTO pending_closures (store_id, order_id, service_order_id, team_name, first_seen_at, attempts, next_attempt_at)
         SELECT ${pendingColumns.has('store_id') ? 'store_id' : "'alexandroupoli'"}, order_id, service_order_id,
-          team_name, first_seen_at, attempts FROM pending_closures_legacy`);
+          team_name, first_seen_at, attempts,
+          ${pendingColumns.has('next_attempt_at') ? 'next_attempt_at' : "'1970-01-01T00:00:00.000Z'"} FROM pending_closures_legacy`);
       database.exec('DROP TABLE pending_closures_legacy');
     });
     migrate();
+  }
+
+  const pendingColumnsAfterMigration = new Set(
+    database.prepare('PRAGMA table_info(pending_closures)').all().map((column) => column.name),
+  );
+  if (!pendingColumnsAfterMigration.has('next_attempt_at')) {
+    database.exec("ALTER TABLE pending_closures ADD COLUMN next_attempt_at TEXT NOT NULL DEFAULT '1970-01-01T00:00:00.000Z'");
   }
 
   database.exec(`
@@ -213,14 +223,28 @@ export function createClosedTicketRepository(dbPath = config.closedTicketsDbPath
     SELECT @store_id, @order_id, @service_order_id, @team_name, @seen_at
     WHERE NOT EXISTS (SELECT 1 FROM closed_tickets WHERE store_id = @store_id AND order_id = @order_id)
   `);
+  const trackUnknownClosedStatement = database.prepare(`
+    INSERT OR IGNORE INTO pending_closures (store_id, order_id, service_order_id, team_name, first_seen_at)
+    SELECT store_id, order_id, service_order_id, team_name, ?
+    FROM closed_tickets
+    WHERE (? IS NULL OR store_id = ?) AND work_order_sla_outcome = 'unknown' AND work_order_sla_date IS NULL
+  `);
   const listPendingStatement = database.prepare('SELECT * FROM pending_closures WHERE (? IS NULL OR store_id = ?) ORDER BY first_seen_at');
+  const listDuePendingStatement = database.prepare(`
+    SELECT * FROM pending_closures
+    WHERE (? IS NULL OR store_id = ?) AND next_attempt_at <= ?
+    ORDER BY next_attempt_at, first_seen_at
+  `);
   const deletePendingStatement = database.prepare('DELETE FROM pending_closures WHERE order_id = ? AND (? IS NULL OR store_id = ?)');
-  const bumpPendingStatement = database.prepare('UPDATE pending_closures SET attempts = attempts + 1 WHERE order_id = ? AND (? IS NULL OR store_id = ?)');
+  const schedulePendingRetryStatement = database.prepare(`
+    UPDATE pending_closures SET attempts = attempts + 1, next_attempt_at = ?
+    WHERE order_id = ? AND (? IS NULL OR store_id = ?)
+  `);
   const trackMany = database.transaction((rows) => {
     for (const row of rows) trackStatement.run(row);
   });
   const listBetweenStatement = database.prepare(`
-    SELECT store_id, order_id, service_order_id, team_name, service_description, closed_at,
+    SELECT store_id, order_id, service_order_id, team_name, service_description, created_at, closed_at,
       customer_name, city, street, house_number,
       work_order_sla_date, work_order_sla_outcome
     FROM closed_tickets WHERE closed_at >= ? AND closed_at < ? AND (? IS NULL OR store_id = ?) ORDER BY closed_at
@@ -248,11 +272,17 @@ export function createClosedTicketRepository(dbPath = config.closedTicketsDbPath
     trackOpen(rows, seenAt = new Date()) {
       trackMany(rows.map((row) => ({ ...row, store_id: row.store_id || storeId || 'alexandroupoli', seen_at: seenAt.toISOString() })));
     },
+    trackUnknownClosed(seenAt = new Date()) {
+      trackUnknownClosedStatement.run(seenAt.toISOString(), storeId, storeId);
+    },
     listPending() {
       return listPendingStatement.all(storeId, storeId);
     },
-    bumpPending(orderId, pendingStoreId = storeId) {
-      bumpPendingStatement.run(String(orderId), pendingStoreId, pendingStoreId);
+    listDuePending(now = new Date()) {
+      return listDuePendingStatement.all(storeId, storeId, now.toISOString());
+    },
+    schedulePendingRetry(orderId, nextAttemptAt, pendingStoreId = storeId) {
+      schedulePendingRetryStatement.run(nextAttemptAt.toISOString(), String(orderId), pendingStoreId, pendingStoreId);
     },
     removePending(orderId, pendingStoreId = storeId) {
       deletePendingStatement.run(String(orderId), pendingStoreId, pendingStoreId);

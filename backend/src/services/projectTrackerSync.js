@@ -37,7 +37,7 @@ function fieldText(value) {
 }
 
 function readCategoryFields(order, details, categoryMap) {
-  const categoryIds = ['categoryId01', 'categoryId02', 'categoryId03', 'categoryId04', 'categoryId05']
+  const categoryIds = ['categoryId01', 'categoryId02', 'categoryId03', 'categoryId04', 'categoryId05', 'categoryId06']
     .map((field) => fieldText(findOrderField(details, field) ?? order?.Categorization?.[field]))
     .filter(Boolean);
   const candidateValues = [
@@ -55,6 +55,26 @@ function readCategoryFields(order, details, categoryMap) {
     || fieldText(order?.orderType)
     || (categoryIds.length ? `Fiona category ${categoryIds.join(' / ')}` : 'Unmapped Fiona service');
   return { category, sourceLabel, sourceCategoryId: categoryIds.join('|') || null };
+}
+
+const FTTH_PARTIAL_POINTS = 15;
+const FTTH_SCORING_RULE_VERSION = 1;
+
+function readClosingCategory(order, details) {
+  return fieldText(findOrderField(details, 'categoryId06') ?? order?.Categorization?.categoryId06);
+}
+
+function needsRoutingComment(categoryId, closingCategory) {
+  return categoryId === 'ftth_installation' && /^5\.8\.5(\D|$)/.test(closingCategory ?? '');
+}
+
+function isSuccessfulVisit(categoryId, closingCategory) {
+  return categoryId === 'ftth_installation' && /^5\.10(\D|$)/.test(closingCategory ?? '');
+}
+
+function commentMentionsRouting(text) {
+  const normalized = String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return /(^|[^\p{L}\p{N}_])(?:οδευση\s+εγινε|εγινε\s+οδευση)(?=$|[^\p{L}\p{N}_])/u.test(normalized);
 }
 
 export async function syncProjectTracker({
@@ -80,6 +100,7 @@ export async function syncProjectTracker({
     inserted: 0,
     remappedExisting,
     alreadyPresent: 0,
+    updatedExisting: 0,
     notCompleted: 0,
     beforeCutover: 0,
     otherStore: 0,
@@ -87,6 +108,50 @@ export async function syncProjectTracker({
     failed: 0,
   };
   const pause = () => wait(Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs);
+  const storesById = new Map(stores.map((store) => [store.storeId, store]));
+
+  for (const job of repository.getJobsNeedingScoring(FTTH_SCORING_RULE_VERSION)) {
+    const store = storesById.get(job.storeId);
+    if (!store) continue;
+    const client = clients instanceof Map ? clients.get(store.storeId) : clients(store.storeId);
+    if (!client) continue;
+
+    let details;
+    try {
+      await pause();
+      details = await client.orderDetails(job.orderId);
+    } catch {
+      summary.failed += 1;
+      continue;
+    }
+
+    const closingCategory = readClosingCategory({}, details);
+    let pointsOverride = job.pointsOverride;
+    if (needsRoutingComment(job.categoryId, closingCategory)) {
+      let comment;
+      try {
+        await pause();
+        comment = await client.fetchLatestCommentWithSession(job.orderId);
+      } catch {
+        summary.failed += 1;
+        continue;
+      }
+      pointsOverride = commentMentionsRouting(comment?.text) ? null : FTTH_PARTIAL_POINTS;
+    } else if (isSuccessfulVisit(job.categoryId, closingCategory)) {
+      pointsOverride = null;
+    }
+
+    const sourceCategoryId = readCategoryFields({}, details, categoryMap).sourceCategoryId
+      || job.sourceCategoryId;
+    if (repository.updateJobScoring(
+      job.storeId,
+      job.orderId,
+      pointsOverride,
+      currentTime.toISOString(),
+      sourceCategoryId,
+      FTTH_SCORING_RULE_VERSION,
+    )) summary.updatedExisting += 1;
+  }
 
   for (const store of stores) {
     const client = clients instanceof Map ? clients.get(store.storeId) : clients(store.storeId);
@@ -108,7 +173,8 @@ export async function syncProjectTracker({
         const orderId = rawOrderId === null || rawOrderId === undefined ? '' : String(rawOrderId).trim();
         if (!orderId) continue;
         summary.seen += 1;
-        if (repository.hasJob(store.storeId, orderId)) {
+        const existingJob = repository.getJob(store.storeId, orderId);
+        if (existingJob) {
           summary.alreadyPresent += 1;
           continue;
         }
@@ -149,7 +215,23 @@ export async function syncProjectTracker({
           continue;
         }
         const categoryFields = readCategoryFields(order, details, categoryMap);
+        let pointsOverride = null;
+        const closingCategory = readClosingCategory(order, details);
+        if (needsRoutingComment(categoryFields.category?.id, closingCategory)) {
+          let comment;
+          try {
+            await pause();
+            comment = await client.fetchLatestCommentWithSession(orderId);
+          } catch {
+            summary.failed += 1;
+            continue;
+          }
+          if (!commentMentionsRouting(comment?.text)) pointsOverride = FTTH_PARTIAL_POINTS;
+        } else if (isSuccessfulVisit(categoryFields.category?.id, closingCategory)) {
+          pointsOverride = null;
+        }
         if (repository.insertJob({
+          pointsOverride,
           storeId: store.storeId,
           orderId,
           teamName,
@@ -157,6 +239,7 @@ export async function syncProjectTracker({
           sourceLabel: categoryFields.sourceLabel,
           sourceCategoryId: categoryFields.sourceCategoryId,
           categoryId: categoryFields.category?.id ?? null,
+          scoringVersion: FTTH_SCORING_RULE_VERSION,
           importedAt: currentTime.toISOString(),
         })) summary.inserted += 1;
       }

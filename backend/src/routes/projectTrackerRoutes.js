@@ -13,6 +13,10 @@ function scopeFromQuery(req, res) {
   return { storeId, teamName };
 }
 
+function canAccessTeam(editor, storeId, teamName) {
+  return editor.role === 'admin' || (editor.storeId === storeId && editor.teamName === teamName);
+}
+
 export function createProjectTrackerRoutes({ repository, auth, stores = [], getEditorDetails = async () => null }) {
   const router = express.Router();
   const storeNames = Object.fromEntries(stores.map((store) => [store.storeId, store.storeName]));
@@ -31,7 +35,10 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
       if (!scope) return undefined;
       const month = String(req.query.month ?? athensMonthOf(new Date()));
       const jobs = repository.getMonthJobs(month, scope.storeId, scope.teamName);
-      return res.json({ success: true, ...buildProjectTrackerMonth(month, jobs) });
+      const paymentLock = scope.storeId && scope.teamName
+        ? repository.getMonthLock(scope.storeId, scope.teamName, month)
+        : { locked: false, changedAt: null };
+      return res.json({ success: true, ...buildProjectTrackerMonth(month, jobs), paymentLock });
     } catch (error) {
       return res.status(400).json({ success: false, message: error.message });
     }
@@ -59,7 +66,7 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
     if (!/^[\w-]{1,40}$/.test(orderId)) {
       return res.status(400).json({ success: false, message: 'Invalid order ID' });
     }
-    if (req.trackerEditor.storeId !== storeId || req.trackerEditor.teamName !== teamName) {
+    if (!canAccessTeam(req.trackerEditor, storeId, teamName)) {
       return res.status(403).json({ success: false, message: 'Editor is not authorized for this team' });
     }
     const job = repository.getJob(storeId, orderId);
@@ -77,17 +84,16 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
   });
 
   router.put('/jobs/:orderId', auth.requireAuth, (req, res) => {
-    const { storeId, teamName, categoryId, pointsOverride } = req.body ?? {};
+    const { storeId, teamName, categoryId } = req.body ?? {};
     const orderId = String(req.params.orderId ?? '');
     if (!/^[\w-]{1,40}$/.test(orderId)) {
       return res.status(400).json({ success: false, message: 'Invalid order ID' });
     }
     if (typeof storeId !== 'string' || typeof teamName !== 'string'
-      || (categoryId !== null && !getProjectTrackerCategory(categoryId))
-      || (pointsOverride !== null && !Number.isInteger(pointsOverride))) {
+      || (categoryId !== null && !getProjectTrackerCategory(categoryId))) {
       return res.status(400).json({ success: false, message: 'Invalid tracker correction' });
     }
-    if (req.trackerEditor.storeId !== storeId || req.trackerEditor.teamName !== teamName) {
+    if (!canAccessTeam(req.trackerEditor, storeId, teamName)) {
       return res.status(403).json({ success: false, message: 'Editor is not authorized for this team' });
     }
 
@@ -97,11 +103,37 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
         orderId,
         teamName,
         categoryId,
-        pointsOverride,
+        allowLocked: req.trackerEditor.role === 'admin',
         changedAt: new Date().toISOString(),
       });
       if (!job) return res.status(404).json({ success: false, message: 'Tracker job not found for this team' });
       return res.json({ success: true, job });
+    } catch (error) {
+      const status = error.code === 'PROJECT_TRACKER_MONTH_LOCKED' ? 409 : 400;
+      return res.status(status).json({ success: false, message: error.message });
+    }
+  });
+
+  router.put('/month-lock', auth.requireAuth, (req, res) => {
+    if (req.trackerEditor.role !== 'admin') {
+      return res.status(403).json({ success: false, message: 'Admin access required' });
+    }
+    const { storeId, teamName, month, locked } = req.body ?? {};
+    if (typeof storeId !== 'string' || !storeId.trim()
+      || typeof teamName !== 'string' || !teamName.trim()
+      || !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month))
+      || typeof locked !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'Invalid month lock request' });
+    }
+    try {
+      const paymentLock = repository.setMonthLock({
+        storeId: storeId.trim(),
+        teamName: teamName.trim(),
+        month,
+        locked,
+        changedAt: new Date().toISOString(),
+      });
+      return res.json({ success: true, paymentLock });
     } catch (error) {
       return res.status(400).json({ success: false, message: error.message });
     }

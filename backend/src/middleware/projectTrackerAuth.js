@@ -8,18 +8,22 @@ const FAILURE_WINDOW_MS = 15 * 60 * 1000;
 const sha256 = (value) => crypto.createHash('sha256').update(value).digest();
 const editorKey = (storeId, teamName) => `${storeId}|${teamName}`;
 
-export function createProjectTrackerAuth({ teamPasswords = {}, sessionSecret = '', now = () => Date.now() } = {}) {
+export function createProjectTrackerAuth({
+  teamPasswords = {},
+  adminPassword = '',
+  sessionSecret = '',
+  now = () => Date.now(),
+} = {}) {
   const passwords = new Map(Object.entries(teamPasswords));
   const failures = new Map();
   const key = sessionSecret ? sha256(`project-tracker-session:${sessionSecret}`) : null;
 
   const sign = (payload) => crypto.createHmac('sha256', key).update(payload).digest('hex');
 
-  function issueToken(storeId, teamName) {
+  function issueToken(editor) {
     const payload = Buffer.from(JSON.stringify({
       expiresAt: now() + SESSION_MS,
-      storeId,
-      teamName,
+      ...editor,
     })).toString('base64url');
     return `${payload}.${sign(payload)}`;
   }
@@ -43,8 +47,11 @@ export function createProjectTrackerAuth({ teamPasswords = {}, sessionSecret = '
     try {
       const session = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
       if (!Number.isFinite(session.expiresAt) || session.expiresAt < now()) return null;
-      if (!passwords.has(editorKey(session.storeId, session.teamName))) return null;
-      return { storeId: session.storeId, teamName: session.teamName };
+      if (session.role === 'admin') {
+        return adminPassword ? { role: 'admin' } : null;
+      }
+      if (session.role !== 'editor' || !passwords.has(editorKey(session.storeId, session.teamName))) return null;
+      return { role: 'editor', storeId: session.storeId, teamName: session.teamName };
     } catch {
       return null;
     }
@@ -70,10 +77,24 @@ export function createProjectTrackerAuth({ teamPasswords = {}, sessionSecret = '
     if (!key) return res.status(503).json({ success: false, message: 'Tracker editor sessions are not configured' });
     if (tooManyFailures(req.ip)) return res.status(429).json({ success: false, message: 'Too many attempts. Try again later.' });
 
+    const supplied = sha256(String(req.body?.password ?? ''));
+    const expectedAdmin = sha256(adminPassword || crypto.randomBytes(32).toString('hex'));
+    if (req.body?.role === 'admin') {
+      if (!adminPassword || !crypto.timingSafeEqual(supplied, expectedAdmin)) {
+        recordFailure(req.ip);
+        return res.status(adminPassword ? 401 : 403).json({ success: false, message: 'Invalid editor credentials' });
+      }
+      failures.delete(req.ip);
+      res.setHeader('Set-Cookie', cookie(req, issueToken({ role: 'admin' }), SESSION_MS / 1000));
+      return res.json({ success: true, editor: { role: 'admin' } });
+    }
+
+    if (req.body?.role && req.body.role !== 'editor') {
+      return res.status(400).json({ success: false, message: 'Invalid tracker role' });
+    }
     const storeId = String(req.body?.storeId ?? '').trim();
     const teamName = String(req.body?.teamName ?? '').trim();
     const password = passwords.get(editorKey(storeId, teamName));
-    const supplied = sha256(String(req.body?.password ?? ''));
     const expected = sha256(password ?? crypto.randomBytes(32).toString('hex'));
     if (!password || !crypto.timingSafeEqual(supplied, expected)) {
       recordFailure(req.ip);
@@ -81,8 +102,9 @@ export function createProjectTrackerAuth({ teamPasswords = {}, sessionSecret = '
     }
 
     failures.delete(req.ip);
-    res.setHeader('Set-Cookie', cookie(req, issueToken(storeId, teamName), SESSION_MS / 1000));
-    return res.json({ success: true, storeId, teamName });
+    const editor = { role: 'editor', storeId, teamName };
+    res.setHeader('Set-Cookie', cookie(req, issueToken(editor), SESSION_MS / 1000));
+    return res.json({ success: true, editor });
   }
 
   return {

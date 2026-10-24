@@ -83,6 +83,57 @@ test('combined monthly stats keep matching order IDs distinct by store', () => {
   }
 });
 
+test('monthly analytics include activity, workload distributions, durations and previous-month comparison', () => {
+  const closed = createClosedTicketRepository(':memory:', null);
+  const observations = createTicketObservationRepository(':memory:', null);
+  try {
+    closed.insert({
+      ...row('oct-1', 'Team A', '2026-10-02T09:00:00.000Z', '2026-10-02T10:00:00.000Z', 'on_time'),
+      store_id: 'alexandroupoli',
+      created_at: '2026-10-02T07:00:00.000Z',
+      city: 'Αλεξανδρούπολη',
+      service_description: 'Fiber',
+    });
+    closed.insert({
+      ...row('oct-2', 'Team A', '2026-10-02T10:00:00.000Z', '2026-10-02T11:00:00.000Z', 'on_time'),
+      store_id: 'komotini',
+      created_at: '2026-10-02T07:00:00.000Z',
+      city: 'Κομοτηνή',
+      service_description: 'TV',
+    });
+    closed.insert({
+      ...row('sep-1', 'Team B', '2026-09-14T08:00:00.000Z', '2026-09-14T10:00:00.000Z', 'on_time'),
+      created_at: '2026-09-14T07:00:00.000Z',
+      city: 'Αλεξανδρούπολη',
+      service_description: 'Fiber',
+    });
+
+    const stats = buildMonthlyStats('2026-10', closed, observations);
+
+    assert.equal(stats.activity.daily.length, 31);
+    assert.deepEqual(stats.activity.daily[1], { date: '2026-10-02', day: 2, total: 2 });
+    assert.equal(stats.activity.daily[0].total, 0);
+    assert.equal(stats.activity.weekdays.find((item) => item.weekday === 'Fri').total, 2);
+    assert.equal(stats.activity.hours.find((item) => item.hour === 12).total, 1);
+    assert.equal(stats.activity.hours.find((item) => item.hour === 13).total, 1);
+    assert.deepEqual(stats.services.map(({ service, total, sharePercent }) => ({ service, total, sharePercent })), [
+      { service: 'Fiber', total: 1, sharePercent: 50 },
+      { service: 'TV', total: 1, sharePercent: 50 },
+    ]);
+    assert.equal(stats.stores.length, 2);
+    assert.equal('cities' in stats, false);
+    assert.deepEqual(stats.duration, { total: 2, missing: 0, meanHours: 2.5, medianHours: 2.5 });
+    assert.deepEqual(stats.comparison, {
+      previousMonth: '2026-09',
+      previous: { total: 1, onTimePercent: 100, late: 0, firstCallPercent: null, meanDurationHours: 1, medianDurationHours: 1, durationTotal: 1 },
+      current: { total: 2, onTimePercent: 100, late: 0, firstCallPercent: null, meanDurationHours: 2.5, medianDurationHours: 2.5, durationTotal: 2 },
+    });
+  } finally {
+    closed.close();
+    observations.close();
+  }
+});
+
 test('monthly stats reject a malformed month and Athens month handles the boundary', () => {
   assert.throws(() => buildMonthlyStats('2026-13', {}, {}), /YYYY-MM/);
   assert.equal(athensMonthOf('2026-09-30T21:30:00.000Z'), '2026-10');

@@ -25,17 +25,17 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --ink: #e8efea;
-  --muted: #a2b0aa;
-  --surface: #20322e;
-  --page: #14231f;
-  --line: #354941;
-  --line-strong: #4b6359;
-  --forest: #102b25;
-  --forest-mid: #6eb39c;
-  --forest-soft: #283f37;
-  --coral: #ff8a68;
-  --coral-soft: #4b332e;
+  --ink: #f1f3f5;
+  --muted: #adb4bc;
+  --surface: #22272d;
+  --page: #171a1f;
+  --line: #3b424b;
+  --line-strong: #505862;
+  --forest: #30363d;
+  --forest-mid: #98a89f;
+  --forest-soft: #282e35;
+  --coral: #e35f42;
+  --coral-soft: #3a2b27;
   --error: #ffb09c;
   --error-soft: #462e29;
   --shadow: 0 18px 50px rgb(0 0 0 / 34%);
@@ -55,6 +55,10 @@ body {
   color: var(--ink);
   font-size: 14px;
   line-height: 1.45;
+}
+
+:root[data-theme='dark'] body {
+  background-image: linear-gradient(rgb(173 180 188 / 3%) 1px, transparent 1px), linear-gradient(90deg, rgb(173 180 188 / 3%) 1px, transparent 1px);
 }
 
 button,
@@ -334,6 +338,58 @@ h1 {
   margin-bottom: 14px;
 }
 
+.month-summary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.month-lock-button,
+.month-lock-status,
+.locked-job-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.month-lock-button {
+  min-height: 34px;
+  padding: 0 9px;
+  border: 1px solid var(--line-strong);
+  background: var(--forest-soft);
+  color: var(--forest-mid);
+  cursor: pointer;
+}
+
+.month-lock-button:hover:not(:disabled) {
+  border-color: var(--forest-mid);
+}
+
+.month-lock-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.month-lock-button.is-locked {
+  border-color: var(--coral);
+  background: var(--coral-soft);
+  color: var(--coral);
+}
+
+.month-lock-status {
+  min-height: 30px;
+  padding: 0 8px;
+  background: var(--forest-soft);
+  color: var(--forest-mid);
+}
+
 .month-navigation {
   min-width: 0;
   gap: 10px;
@@ -371,6 +427,10 @@ h1 {
 .month-points span {
   font-size: 11px;
   font-weight: 700;
+}
+
+.locked-job-label {
+  color: var(--forest-mid);
 }
 
 .weekday-row,
@@ -453,7 +513,7 @@ h1 {
 }
 
 .selected .day-points {
-  color: #d8efe4;
+  color: #f1f3f5;
 }
 
 .day-empty-mark {
@@ -610,7 +670,7 @@ h1 {
 
 .correction-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 92px;
+  grid-template-columns: minmax(0, 1fr);
   align-items: end;
   gap: 9px;
   margin: 13px 0 0 15px;
@@ -642,10 +702,6 @@ h1 {
   background: var(--surface);
   color: var(--ink);
   font-size: 11px;
-}
-
-.correction-controls .points-input {
-  grid-column: 2;
 }
 
 .save-correction {
@@ -1018,7 +1074,8 @@ h1 {
   font-weight: 700;
 }
 
-.login-modal input {
+.login-modal input,
+.login-modal select {
   height: 42px;
   font-size: 14px;
 }
@@ -1156,7 +1213,23 @@ h1 {
   }
 
   .month-toolbar {
+    flex-wrap: wrap;
     margin-bottom: 9px;
+  }
+
+  .month-summary-actions {
+    width: 100%;
+    gap: 5px;
+  }
+
+  .month-lock-button {
+    min-height: 32px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .month-lock-status {
+    font-size: 10px;
   }
 
   .month-navigation {
@@ -1278,7 +1351,6 @@ h1 {
   }
 
   .correction-controls {
-    grid-template-columns: minmax(0, 1fr) 78px;
     margin-left: 0;
   }
 
