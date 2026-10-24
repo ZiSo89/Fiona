@@ -9,11 +9,12 @@ import {
   ACTIVE_STORE_KEY,
   FILTERS,
   SCROLL_POSITION_KEY,
+  clearCachedTickets,
   readActiveFilter,
   readCachedTickets,
   readSelectedStore,
   saveScrollPosition,
-  storeCacheKey,
+  writeCachedTickets,
 } from './features/tickets/ticketStorage.js';
 import { normalizeSearchText } from './shared/searchUtils.js';
 
@@ -35,6 +36,7 @@ function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [syncTrigger, setSyncTrigger] = useState(0);
   const [now, setNow] = useState(() => Date.now());
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     const clock = window.setInterval(() => setNow(Date.now()), 1000);
@@ -106,11 +108,13 @@ function App() {
         setTickets(nextTickets);
         setSourceMode(result?.status === 'live' ? 'live' : nextTickets.length ? 'stale' : 'empty');
 
-        window.localStorage.setItem(storeCacheKey(storeId), JSON.stringify(nextTickets.map((ticket) => ({
-          ...ticket.raw,
-          storeId: ticket.storeId,
-          storeName: ticket.storeName,
-        }))));
+        if (result?.status === 'live') {
+          writeCachedTickets(storeId, nextTickets.map((ticket) => ({
+            ...ticket.raw,
+            storeId: ticket.storeId,
+            storeName: ticket.storeName,
+          })));
+        }
         setLastUpdated(snapshot?.lastUpdatedAt ?? null);
       } catch (error) {
         if (!current) return;
@@ -164,6 +168,19 @@ function App() {
     setLastUpdated(null);
     setLoading(true);
   };
+  const logout = async () => {
+    setLoggingOut(true);
+    try {
+      const response = await fetch('/api/logout', { method: 'POST' });
+      if (!response.ok) console.warn(`Logout request returned ${response.status}`);
+    } catch (error) {
+      console.warn('Unable to end the server session:', error.message);
+    } finally {
+      clearCachedTickets();
+      window.dispatchEvent(new Event('fiona-logged-out'));
+      setLoggingOut(false);
+    }
+  };
 
   const statusCounts = useMemo(() => Object.fromEntries(
     FILTERS.map((status) => [status, status === 'ALL' ? tickets.filter((ticket) => ticket.status !== 'COMPLETED').length : tickets.filter((ticket) => ticket.status === status).length])
@@ -179,6 +196,7 @@ function App() {
           <div className="header-actions">
             <button className={`icon-button ${loading ? 'is-loading' : ''}`} type="button" aria-label={loading ? 'Γίνεται συγχρονισμός' : 'Συγχρονισμός εισιτηρίων'} title={loading ? 'Γίνεται συγχρονισμός' : 'Συγχρονισμός εισιτηρίων'} aria-busy={loading} disabled={loading} onClick={() => { saveScrollPosition(); setLoading(true); setSyncTrigger((value) => value + 1); }}><Icon name="sync" /></button>
             <button className="icon-button" type="button" aria-label="Αναζήτηση" title="Search" onClick={() => setShowSearch((value) => !value)}><Icon name="search" /></button>
+            <button className="icon-button" type="button" aria-label="Αποσύνδεση" title="Αποσύνδεση" disabled={loggingOut} onClick={logout}><Icon name="logout" /></button>
           </div>
         </div>
         {showSearch && <label className="search-wrap"><Icon name="search" /><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={isComplete ? 'Αναζήτηση πελάτη, διεύθυνσης ή εισιτηρίου' : 'Αναζήτηση εισιτηρίου ή πελάτη'} list={isComplete ? 'closed-ticket-suggestions' : 'ticket-search-suggestions'} /></label>}
