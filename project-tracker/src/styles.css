@@ -724,6 +724,12 @@ h1 {
   opacity: 0.45;
 }
 
+.job-greek-label {
+  margin: 2px 0 0 15px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
 .points-note {
   margin: 4px 0 0 15px;
   color: #e8822a;

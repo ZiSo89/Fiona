@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -188,6 +188,27 @@ function formatDate(value) {
   return visibleDateFormatter.format(new Date(`${value}T12:00:00.000Z`));
 }
 
+const greekServiceTypes = {
+  'ftth activation': 'Εγκατάσταση οπτικής (FTTH)',
+  'on-site support ftth': 'Βλάβη οπτικής (FTTH)',
+  'cpe installation fwa': 'Εγκατάσταση 5G (FWA)',
+  'on-site support fwa': 'Βλάβη 5G (FWA)',
+  'nga activation': 'Σύνδεση χαλκού',
+  'on-site support nga': 'Βλάβη χαλκού',
+  'on-site support llu': 'Βλάβη χαλκού',
+  'si bridging': 'Βλάβη χαλκού',
+  'cpe installation nga': 'Εγκατάσταση router',
+  'cpe installation llu': 'Εγκατάσταση router',
+  'cpe installation': 'Εγκατάσταση EON',
+  'cpe installation dth tv': 'Δορυφορική: εγκατάσταση',
+  'on-site support dth tv': 'Δορυφορική: βλάβη',
+  'combined wind-ap': 'Συνδυαστικό',
+  'combined visit ote-wind': 'Συνδυαστικό',
+  'combined llu visit ote-wind': 'Συνδυαστικό',
+  'co visit': 'Καμπίνα (CO Visit)',
+  'cabling repair and maintenance': 'Νέα εγκατάσταση / επισκευή καλωδίωσης',
+};
+
 function jobLabel(job) {
   return job.fionaCategory || job.sourceLabel || job.categoryName || 'Αντιστοίχιση κατηγορίας';
 }
@@ -211,6 +232,11 @@ async function trackerRequest(path, options = {}) {
   return data;
 }
 
+function jobGreekLabel(job) {
+  const english = String(jobLabel(job)).trim().replace(/\s+/g, ' ').toLowerCase();
+  return greekServiceTypes[english] || (job.categoryId ? categoryLabel(job.categoryId) : '');
+}
+
 function App() {
   const today = currentAthensDate();
   const [savedView] = useState(readTrackerView);
@@ -223,6 +249,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
+  const lastMonthViewRef = useRef('');
   const [error, setError] = useState('');
   const [editor, setEditor] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
@@ -324,7 +351,12 @@ function App() {
     }
     let active = true;
     setRefreshing(true);
-    setDayJobs([]);
+    // Keep the current list during the periodic refresh so the page height and scroll position stay stable.
+    const viewKey = `${selectedKey}|${month}`;
+    if (lastMonthViewRef.current !== viewKey) {
+      lastMonthViewRef.current = viewKey;
+      setDayJobs([]);
+    }
     const query = new URLSearchParams({
       month,
       storeId: selectedProfile.storeId,
@@ -505,7 +537,7 @@ function App() {
     .filter((job) => {
       if (!needle) return true;
       const details = jobDetails[`${job.storeId}::${job.orderId}`] || {};
-      return [jobLabel(job), details.serviceOrderId, details.customerName, details.address, details.latestComment?.text]
+      return [jobLabel(job), jobGreekLabel(job), details.serviceOrderId, details.customerName, details.address, details.latestComment?.text]
         .filter(Boolean).join(' ').toLocaleLowerCase('el-GR').includes(needle);
     })
     .sort((a, b) => (newestFirst ? 1 : -1) * (new Date(b.closedAt) - new Date(a.closedAt)));
@@ -695,6 +727,7 @@ function App() {
                         <h3>{jobLabel(job)}</h3>
                         {job.mapped ? <span className="job-points">+{job.points} pts</span> : <span className="pending-label">Εκκρεμεί</span>}
                       </div>
+                      {jobGreekLabel(job) && <p className="job-greek-label">{jobGreekLabel(job)}</p>}
                       {pointsNote(job) && <p className="points-note">{pointsNote(job)}</p>}
                       {editorMatchesProfile && (
                         <>
