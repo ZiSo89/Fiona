@@ -25,7 +25,12 @@ test('imports only Fiona-completed jobs after cutover and deduplicates repeat sy
     const client = {
       async dailyWorkorders(date, groups) {
         calls.push(['daily', date, groups]);
-        return [{ orderId: 'fiona-1', teamName: 'Install Team', orderType: 'FTTH Installation' }];
+        return [{
+          orderId: 'fiona-1',
+          teamName: 'NEW TECHNOLOGIES LTD KOMOTINI',
+          teamGroupName: 'NEW TECHNOLOGIES LTD KOMOTINI',
+          orderType: 'FTTH Installation',
+        }];
       },
       async orderDetails(orderId) {
         calls.push(['details', orderId]);
@@ -34,6 +39,7 @@ test('imports only Fiona-completed jobs after cutover and deduplicates repeat sy
           orderStatus: 'COMPLETED',
           workOrderFinishedOnPremiseTime: '2026-10-18T10:00:00.000Z',
           serviceGroup: 'ALEXANDROUPOLI 395',
+          teamName: 'Install Team',
           orderType: 'FTTH Installation',
           categoryId06: '5.10 Visit OK, Delivery OK',
         };
@@ -58,6 +64,55 @@ test('imports only Fiona-completed jobs after cutover and deduplicates repeat sy
     assert.equal(repository.getMonthJobs('2026-10')[0].points, 50);
     assert.deepEqual(calls[0], ['daily', '18.10.2026', ['395']]);
     assert.equal(calls.filter(([kind]) => kind === 'details').length, 1);
+  });
+});
+
+test('corrects a previously imported group name to the assigned team name', async () => {
+  await withRepository(async (repository) => {
+    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    repository.insertJob({
+      storeId: 'alexandroupoli',
+      orderId: 'fiona-grouped',
+      teamName: 'NEW TECHNOLOGIES LTD KOMOTINI',
+      closedAt: '2026-10-18T10:00:00.000Z',
+      sourceLabel: 'FTTH Installation',
+      sourceCategoryId: null,
+      categoryId: 'ftth_installation',
+      pointsOverride: null,
+      scoringVersion: 1,
+      importedAt: '2026-10-18T11:00:00.000Z',
+    });
+    const client = {
+      async dailyWorkorders() {
+        return [{
+          orderId: 'fiona-grouped',
+          teamName: null,
+          teamGroupName: 'NEW TECHNOLOGIES LTD KOMOTINI',
+        }];
+      },
+      async orderDetails() {
+        return {
+          orderStatus: 'COMPLETED',
+          workOrderFinishedOnPremiseTime: '2026-10-18T10:00:00.000Z',
+          serviceGroup: 'ALEXANDROUPOLI 395',
+          teamName: 'Kostas Tektonidis',
+        };
+      },
+    };
+
+    const summary = await syncProjectTracker({
+      stores: [store],
+      clients: new Map([['alexandroupoli', client]]),
+      repository,
+      lookbackDays: 1,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      wait: async () => {},
+      now: () => new Date('2026-10-18T12:00:00.000Z'),
+    });
+
+    assert.equal(summary.teamUpdated, 1);
+    assert.equal(repository.getJob('alexandroupoli', 'fiona-grouped').teamName, 'Kostas Tektonidis');
   });
 });
 

@@ -724,6 +724,124 @@ h1 {
   opacity: 0.45;
 }
 
+.points-note {
+  margin: 4px 0 0 15px;
+  color: #e8822a;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.category-current {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.category-current svg {
+  margin-left: 4px;
+  color: var(--forest-mid);
+  vertical-align: -2px;
+}
+
+.category-picker {
+  display: grid;
+  gap: 10px;
+}
+
+.category-group {
+  --group-accent: #3b82f6;
+  display: grid;
+  gap: 5px;
+}
+
+.category-group.group-installation { --group-accent: #22a35a; }
+.category-group.group-impairment { --group-accent: #e8822a; }
+
+.category-group h4 {
+  margin: 0;
+  color: var(--group-accent);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.category-options {
+  display: grid;
+  gap: 5px;
+}
+
+.category-option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--group-accent);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: left;
+}
+
+.category-option > svg {
+  flex: none;
+  color: var(--group-accent);
+}
+
+.category-option.is-selected {
+  border-color: var(--group-accent);
+  background: color-mix(in srgb, var(--group-accent) 14%, var(--surface));
+}
+
+.category-option-text {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+
+.category-option-text strong {
+  font-size: 12px;
+}
+
+.category-option-text small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-option-points {
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--group-accent) 18%, transparent);
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.category-clear {
+  min-height: 32px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.category-clear.is-selected {
+  border-style: solid;
+  color: var(--ink);
+}
+
 .job-details {
   margin: 10px 0 0 15px;
 }

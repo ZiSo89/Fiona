@@ -43,15 +43,11 @@ test('wrong editor password is rejected, then the editor corrects a pending job'
   await page.getByRole('dialog').getByRole('button', { name: 'Σύνδεση', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Αποσύνδεση', exact: true })).toBeVisible();
 
-  // The earliest job is the unmapped one and starts with open correction controls.
-  const categorySelect = page.locator('.correction-controls select');
-  await expect.poll(() => categorySelect.evaluate((select) => {
-    const controls = select.closest('.correction-controls');
-    return Math.round(select.getBoundingClientRect().width) === Math.round(controls.getBoundingClientRect().width);
-  })).toBe(true);
+  // The earliest job is the unmapped one and starts with the category picker open.
+  await expect(page.locator('.correction-controls .category-picker')).toBeVisible();
   const save = page.getByRole('button', { name: 'Αποθήκευση' });
   await expect(save).toBeDisabled();
-  await page.locator('.correction-controls select').selectOption('copper_installation');
+  await page.locator('.category-option', { hasText: 'Άλλες εργασίες' }).click();
   await expect(save).toBeEnabled();
   await save.click();
 

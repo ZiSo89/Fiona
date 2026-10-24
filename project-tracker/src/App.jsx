@@ -6,8 +6,15 @@ import {
   Check,
   ArrowDownUp,
   CircleAlert,
+  Cable,
   Cloud,
   Copy,
+  Package,
+  Router,
+  Satellite,
+  Wifi,
+  Wrench,
+  Zap,
   LoaderCircle,
   LockKeyhole,
   LogOut,
@@ -23,16 +30,81 @@ import {
   X,
 } from 'lucide-react';
 
-const categories = [
-  { id: 'ftth_installation', name: 'FTTH Installation', points: 50 },
-  { id: 'soho_installation_impairment', name: 'SOHO Installation / Impairment', points: 20 },
-  { id: 'fwa_installation', name: 'FWA Installation', points: 35 },
-  { id: 'dth_tv_impairment', name: 'DTH TV Impairment', points: 18 },
-  { id: 'dth_tv_installation', name: 'DTH TV Installation', points: 25 },
-  { id: 'all_impairments', name: 'All Impairments', points: 15 },
-  { id: 'copper_installation', name: 'Copper Installation', points: 15 },
-  { id: 'canceled_eon_installation', name: 'Canceled / EON Installation', points: 5 },
+const categoryGroups = [
+  { id: 'installation', label: 'Εγκαταστάσεις' },
+  { id: 'impairment', label: 'Βλάβες' },
+  { id: 'other', label: 'Άλλες εργασίες' },
 ];
+
+// selectable: false keeps the category displayable for existing jobs without offering it in the picker.
+const categories = [
+  { id: 'ftth_installation', label: 'Οπτική εγκατάσταση', source: 'FTTH Activation', points: 50, group: 'installation', Icon: Zap },
+  { id: 'fwa_installation', label: 'Εγκατάσταση 5G', source: 'CPE Installation FWA', points: 35, group: 'installation', Icon: Wifi },
+  { id: 'dth_tv_installation', label: 'Δορυφορική εγκατάσταση', source: 'CPE Installation DTH TV', points: 25, group: 'installation', Icon: Satellite },
+  { id: 'canceled_eon_installation', label: 'Εγκατάσταση EON', source: 'CPE Installation', points: 5, group: 'installation', Icon: Router },
+  { id: 'ftth_impairment', label: 'Οπτική βλάβη', source: 'On-Site Support FTTH', points: 15, group: 'impairment', Icon: Wrench },
+  { id: 'fwa_impairment', label: 'Βλάβη 5G', source: 'On-Site Support FWA', points: 15, group: 'impairment', Icon: Wrench },
+  { id: 'dth_tv_impairment', label: 'Δορυφορική βλάβη', source: 'On-Site Support DTH TV', points: 18, group: 'impairment', Icon: Wrench },
+  { id: 'copper_impairment', label: 'Βλάβη χαλκού', source: 'On-Site Support NGA / LLU, SI Bridging', points: 15, group: 'impairment', Icon: Wrench },
+  { id: 'other_works', label: 'Άλλες εργασίες', source: 'Χαλκός, router, συνδυαστικά, καμπίνα', points: 15, group: 'other', Icon: Package },
+  { id: 'cabling_repair', label: 'Καλωδίωση / νέα εγκατάσταση', source: 'Cabling repair and maintenance', points: 50, group: 'other', Icon: Cable, selectable: false },
+  { id: 'soho_installation_impairment', label: 'SOHO', source: 'SOHO Installation / Impairment', points: 20, group: 'other', Icon: Package, selectable: false },
+];
+
+function categoryLabel(categoryId, fallback) {
+  return categories.find((category) => category.id === categoryId)?.label || fallback || 'Χωρίς αντιστοίχιση';
+}
+
+// Explains why a job's points differ from its category's base points.
+function pointsNote(job) {
+  const base = categories.find((category) => category.id === job.categoryId)?.points;
+  if (!job.mapped || base === undefined || job.points === base) return '';
+  if (job.correctedAt) return `Πόντοι προσαρμοσμένοι χειροκίνητα (βασικοί ${base})`;
+  return `${job.points} από ${base} πόντους, δεν έγινε η όδευση`;
+}
+
+function CategoryPicker({ value, current, onChange }) {
+  return (
+    <div className="category-picker">
+      {categoryGroups.map((group) => {
+        const options = categories.filter((category) => category.group === group.id
+          && (category.selectable !== false || category.id === current));
+        if (!options.length) return null;
+        return (
+          <section className={`category-group group-${group.id}`} key={group.id}>
+            <h4>{group.label}</h4>
+            <div className="category-options">
+              {options.map(({ id, label, source, points, Icon }) => (
+                <button
+                  type="button"
+                  className={`category-option${value === id ? ' is-selected' : ''}`}
+                  aria-pressed={value === id}
+                  key={id}
+                  onClick={() => onChange(id)}
+                >
+                  <Icon size={16} />
+                  <span className="category-option-text">
+                    <strong>{label}</strong>
+                    <small>{source}</small>
+                  </span>
+                  <span className="category-option-points">{points}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        );
+      })}
+      <button
+        type="button"
+        className={`category-clear${value === '' ? ' is-selected' : ''}`}
+        aria-pressed={value === ''}
+        onClick={() => onChange('')}
+      >
+        Χωρίς αντιστοίχιση
+      </button>
+    </div>
+  );
+}
 
 const dayFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Europe/Athens',
@@ -167,6 +239,7 @@ function App() {
   const [searchTerm, setSearchTerm] = useState('');
   const [newestFirst, setNewestFirst] = useState(false);
   const [editingJobId, setEditingJobId] = useState('');
+  const [pickerJobId, setPickerJobId] = useState('');
   const [copiedJobId, setCopiedJobId] = useState('');
   const [darkMode, setDarkMode] = useState(() => {
     try {
@@ -622,6 +695,7 @@ function App() {
                         <h3>{jobLabel(job)}</h3>
                         {job.mapped ? <span className="job-points">+{job.points} pts</span> : <span className="pending-label">Εκκρεμεί</span>}
                       </div>
+                      {pointsNote(job) && <p className="points-note">{pointsNote(job)}</p>}
                       {editorMatchesProfile && (
                         <>
                           <div className="job-details-panel">
@@ -656,16 +730,28 @@ function App() {
                           </div>
                           {canEditCorrections && isActive ? (
                             <div className="correction-controls">
-                            <label>
-                              <span>Κατηγορία</span>
-                              <select
-                                value={draft.categoryId}
-                                onChange={(event) => setDrafts((current) => ({ ...current, [key]: { ...draft, categoryId: event.target.value } }))}
-                              >
-                                <option value="">Χωρίς αντιστοίχιση</option>
-                                {categories.map((category) => <option value={category.id} key={category.id}>{category.name} · {category.points} pts</option>)}
-                              </select>
-                            </label>
+                              <div className="category-current">
+                                <span>
+                                  {isDirty ? 'Νέα επιλογή' : job.mapped && !job.correctedAt ? 'Αυτόματα' : 'Κατηγορία'}
+                                  : <strong>{categoryLabel(draft.categoryId)}</strong>
+                                  {!isDirty && job.mapped && !job.correctedAt && <Check size={12} />}
+                                </span>
+                                {draft.categoryId && (
+                                  <button type="button" className="edit-points-link" onClick={() => setPickerJobId(pickerJobId === key ? '' : key)}>
+                                    {pickerJobId === key ? 'Κλείσιμο' : 'Αλλαγή'}
+                                  </button>
+                                )}
+                              </div>
+                              {(!draft.categoryId || pickerJobId === key) && (
+                                <CategoryPicker
+                                  value={draft.categoryId}
+                                  current={job.categoryId}
+                                  onChange={(categoryId) => {
+                                    setDrafts((current) => ({ ...current, [key]: { ...draft, categoryId } }));
+                                    setPickerJobId('');
+                                  }}
+                                />
+                              )}
                             <button className="save-correction" type="button" disabled={!isDirty || savingJobId === key} onClick={() => void saveCorrection(job)}>
                               {savingJobId === key ? <RefreshCw size={15} className="spin" /> : <Save size={15} />}
                               <span>Αποθήκευση</span>
@@ -673,17 +759,17 @@ function App() {
                           </div>
                           ) : canEditCorrections ? (
                             <div className="job-card-footer">
-                              <span>Κατηγορία: <strong>{job.categoryName || 'Χωρίς αντιστοίχιση'}</strong></span>
+                              <span>Κατηγορία: <strong>{categoryLabel(job.categoryId, job.categoryName)}</strong></span>
                               <button type="button" className="edit-points-link" onClick={() => setEditingJobId(key)}>Επεξεργασία πόντων <Pencil size={12} /></button>
                             </div>
                           ) : monthLocked ? (
                             <div className="job-card-footer">
-                              <span>Κατηγορία: <strong>{job.categoryName || 'Χωρίς αντιστοίχιση'}</strong></span>
+                              <span>Κατηγορία: <strong>{categoryLabel(job.categoryId, job.categoryName)}</strong></span>
                               <span className="locked-job-label"><LockKeyhole size={12} /> Εγκεκριμένο</span>
                             </div>
                           ) : (
                             <div className="job-card-footer">
-                              <span>Κατηγορία: <strong>{job.categoryName || 'Χωρίς αντιστοίχιση'}</strong></span>
+                              <span>Κατηγορία: <strong>{categoryLabel(job.categoryId, job.categoryName)}</strong></span>
                             </div>
                           )}
                         </>
@@ -717,7 +803,7 @@ function App() {
                 {monthData.categories.map((entry) => (
                   <div className={`summary-row${entry.mapped ? '' : ' is-pending'}`} key={entry.categoryId || 'unmapped'}>
                     <span className="category-marker" />
-                    <span className="summary-category">{entry.categoryName}</span>
+                    <span className="summary-category">{categoryLabel(entry.categoryId, entry.categoryName)}</span>
                     <span className="summary-count">{entry.jobCount} {entry.jobCount === 1 ? 'εργασία' : 'εργασίες'}</span>
                     <strong>{entry.points} pts</strong>
                   </div>
