@@ -6,19 +6,51 @@ const normalize = (value) => String(value ?? '')
   .replace(/[^a-z0-9]+/g, ' ')
   .trim();
 
+// `sources` are the Fiona work-order types that map automatically to the category.
+// Categories with `selectable: false` still map and score, but are not offered in the editor picker.
 export const PROJECT_TRACKER_CATEGORIES = [
-  { id: 'ftth_installation', name: 'FTTH Installation', points: 50 },
-  { id: 'soho_installation_impairment', name: 'SOHO Installation / Impairment', points: 20 },
-  { id: 'fwa_installation', name: 'FWA Installation', points: 35 },
-  { id: 'dth_tv_impairment', name: 'DTH TV Impairment', points: 18 },
-  { id: 'dth_tv_installation', name: 'DTH TV Installation', points: 25 },
-  { id: 'all_impairments', name: 'All Impairments', points: 15 },
-  { id: 'copper_installation', name: 'Copper Installation', points: 15 },
-  { id: 'canceled_eon_installation', name: 'Canceled / EON Installation', points: 5 },
+  { id: 'ftth_installation', name: 'FTTH Installation', points: 50, sources: ['FTTH Activation'] },
+  { id: 'fwa_installation', name: 'FWA Installation', points: 35, sources: ['CPE Installation FWA'] },
+  { id: 'dth_tv_installation', name: 'DTH TV Installation', points: 25, sources: ['CPE Installation DTH TV'] },
+  { id: 'canceled_eon_installation', name: 'Canceled / EON Installation', points: 5, sources: ['CPE Installation'] },
+  { id: 'ftth_impairment', name: 'FTTH Impairment', points: 15, sources: ['On-Site Support FTTH'] },
+  { id: 'fwa_impairment', name: 'FWA Impairment', points: 15, sources: ['On-Site Support FWA'] },
+  { id: 'dth_tv_impairment', name: 'DTH TV Impairment', points: 18, sources: ['On-Site Support DTH TV'] },
+  {
+    id: 'copper_impairment',
+    name: 'Copper Impairment',
+    points: 15,
+    sources: ['On-Site Support NGA', 'On-Site Support LLU', 'SI Bridging'],
+  },
+  {
+    id: 'other_works',
+    name: 'Other Works',
+    points: 15,
+    sources: [
+      'NGA Activation',
+      'CPE Installation NGA',
+      'CPE Installation LLU',
+      'Combined Wind-AP',
+      'Combined Visit OTE-WIND',
+      'Combined LLU Visit OTE-WIND',
+      'CO Visit',
+    ],
+  },
+  {
+    id: 'cabling_repair',
+    name: 'Cabling Repair and Maintenance',
+    points: 50,
+    sources: ['Cabling repair and maintenance'],
+    selectable: false,
+  },
+  { id: 'soho_installation_impairment', name: 'SOHO Installation / Impairment', points: 20, selectable: false },
 ];
 
 const categoriesById = new Map(PROJECT_TRACKER_CATEGORIES.map((category) => [category.id, category]));
-const categoriesByName = new Map(PROJECT_TRACKER_CATEGORIES.map((category) => [normalize(category.name), category]));
+const categoriesByName = new Map();
+for (const category of PROJECT_TRACKER_CATEGORIES) {
+  for (const label of [category.name, ...(category.sources ?? [])]) categoriesByName.set(normalize(label), category);
+}
 
 export function getProjectTrackerCategory(categoryId) {
   return categoriesById.get(categoryId) ?? null;
@@ -26,7 +58,7 @@ export function getProjectTrackerCategory(categoryId) {
 
 function sourceCategoryLabel(row) {
   const tokens = String(row.source_category_id ?? '').split('|').map((token) => token.trim()).filter(Boolean);
-  const specific = tokens.find((token) => /^(On-Site Support|FTTH Activation|NGA Activation|CPE Installation|DTH TV|FWA Installation)/i.test(token));
+  const specific = tokens.find((token) => /^(On-Site Support|FTTH Activation|NGA Activation|CPE Installation|DTH TV|FWA Installation|Combined|CO Visit|SI Bridging|Cabling)/i.test(token));
   return specific || String(row.source_label ?? '').trim() || null;
 }
 

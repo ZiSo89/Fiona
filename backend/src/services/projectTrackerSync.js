@@ -54,7 +54,10 @@ function readCategoryFields(order, details, categoryMap) {
     || fieldText(findOrderField(details, 'orderType'))
     || fieldText(order?.orderType)
     || (categoryIds.length ? `Fiona category ${categoryIds.join(' / ')}` : 'Unmapped Fiona service');
-  return { category, sourceLabel, sourceCategoryId: categoryIds.join('|') || null };
+  // The plan service description holds the specific work type (e.g. "On-Site Support FTTH").
+  const serviceType = fieldText(findOrderField(details, 'planServiceDescription') ?? order?.planServiceDescription);
+  const sourceTokens = serviceType && !categoryIds.includes(serviceType) ? [...categoryIds, serviceType] : categoryIds;
+  return { category, sourceLabel, sourceCategoryId: sourceTokens.join('|') || null };
 }
 
 const FTTH_PARTIAL_POINTS = 15;
@@ -101,6 +104,7 @@ export async function syncProjectTracker({
     remappedExisting,
     alreadyPresent: 0,
     updatedExisting: 0,
+    teamUpdated: 0,
     notCompleted: 0,
     beforeCutover: 0,
     otherStore: 0,
@@ -110,6 +114,26 @@ export async function syncProjectTracker({
   const pause = () => wait(Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs);
   const storesById = new Map(stores.map((store) => [store.storeId, store]));
 
+  summary.remappedObsolete = 0;
+  for (const job of repository.getJobsWithObsoleteCategory()) {
+    const store = storesById.get(job.storeId);
+    const client = store && (clients instanceof Map ? clients.get(store.storeId) : clients(store.storeId));
+    if (!client) continue;
+    try {
+      await pause();
+      const details = await client.orderDetails(job.orderId);
+      const fields = readCategoryFields({}, details, categoryMap);
+      if (fields.category && repository.remapObsoleteJob(
+        job.storeId,
+        job.orderId,
+        fields.category.id,
+        fields.sourceCategoryId,
+        currentTime.toISOString(),
+      )) summary.remappedObsolete += 1;
+    } catch {
+      summary.failed += 1;
+    }
+  }
   for (const job of repository.getJobsNeedingScoring(FTTH_SCORING_RULE_VERSION)) {
     const store = storesById.get(job.storeId);
     if (!store) continue;
@@ -176,6 +200,22 @@ export async function syncProjectTracker({
         const existingJob = repository.getJob(store.storeId, orderId);
         if (existingJob) {
           summary.alreadyPresent += 1;
+          const teamGroupName = fieldText(order?.teamGroupName);
+          if (teamGroupName && existingJob.teamName === teamGroupName) {
+            let details;
+            try {
+              await pause();
+              details = await client.orderDetails(orderId);
+            } catch {
+              summary.failed += 1;
+              continue;
+            }
+            const assignedTeamName = fieldText(findOrderField(details, 'teamName'));
+            if (assignedTeamName
+              && repository.updateJobTeamName(store.storeId, orderId, assignedTeamName)) {
+              summary.teamUpdated += 1;
+            }
+          }
           continue;
         }
 
@@ -207,9 +247,8 @@ export async function syncProjectTracker({
           continue;
         }
 
-        const teamName = fieldText(order?.teamName)
-          || fieldText(findOrderField(details, 'teamName'))
-          || completed.team_name;
+        const teamName = fieldText(findOrderField(details, 'teamName'))
+          || fieldText(order?.teamName);
         if (!teamName) {
           summary.missingTeam += 1;
           continue;

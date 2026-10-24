@@ -167,7 +167,8 @@ export class FionaClient {
     return (Array.isArray(payload.UserTeams) ? payload.UserTeams : []).flatMap((team) => (
       (Array.isArray(team?.TeamWorkOrders) ? team.TeamWorkOrders : []).map((workorder) => ({
         ...workorder,
-        teamName: workorder?.teamName ?? team?.teamName ?? null,
+        teamName: workorder?.teamName ?? null,
+        teamGroupName: team?.teamName ?? null,
       }))
     ));
   }

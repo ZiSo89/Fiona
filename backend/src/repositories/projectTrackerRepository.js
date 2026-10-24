@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { athensMonthOf } from '../services/closedTicketStats.js';
 import {
   getProjectTrackerCategory,
+  matchProjectTrackerCategory,
   mapProjectTrackerCategory,
   projectTrackerJobFromRow,
 } from '../services/projectTrackerCatalog.js';
@@ -136,6 +137,11 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
     SET points_override = ?, source_category_id = COALESCE(?, source_category_id), scoring_version = ?
     WHERE store_id = ? AND order_id = ?
   `);
+  const updateJobTeamName = database.prepare(`
+    UPDATE project_tracker_jobs
+    SET team_name = ?
+    WHERE store_id = ? AND order_id = ? AND team_name != ?
+  `);
   const insertAudit = database.prepare(`
     INSERT INTO project_tracker_audit (
       store_id, order_id, editor_team, previous_category_id, next_category_id,
@@ -249,8 +255,55 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
     }
     return remapped;
   });
+  // Re-derives categories of uncorrected jobs from their stored Fiona category tokens using the built-in catalog.
+  // Jobs in months locked for payment are left untouched.
+  const migrateCategoryCatalogTransaction = database.transaction((changedAt) => {
+    let migrated = 0;
+    for (const row of database.prepare('SELECT * FROM project_tracker_jobs').all()) {
+      const category = matchProjectTrackerCategory(
+        ...String(row.source_category_id ?? '').split('|').map((token) => token.trim()).filter(Boolean),
+      );
+      if (!category || category.id === row.category_id) continue;
+      if (monthLockById.get(row.store_id, row.team_name, athensMonthOf(row.closed_at))?.locked) continue;
+      updateJob.run(category.id, null, null, 0, row.store_id, row.order_id);
+      insertAudit.run(
+        row.store_id,
+        row.order_id,
+        'SYSTEM:CATEGORY_MIGRATION',
+        row.category_id,
+        category.id,
+        row.points_override,
+        null,
+        changedAt,
+      );
+      migrated += 1;
+    }
+    return migrated;
+  });
+  migrateCategoryCatalogTransaction(new Date().toISOString());
 
   return {
+    getJobsWithObsoleteCategory() {
+      return database.prepare('SELECT * FROM project_tracker_jobs WHERE category_id IS NOT NULL ORDER BY closed_at, order_id')
+        .all()
+        .filter((row) => !getProjectTrackerCategory(row.category_id))
+        .map((row) => ({ storeId: row.store_id, orderId: row.order_id, sourceCategoryId: row.source_category_id }));
+    },
+    // Moves a job off a removed category; the audit row lets the change be reviewed later.
+    remapObsoleteJob(storeId, orderId, categoryId, sourceCategoryId, changedAt = new Date().toISOString()) {
+      return database.transaction(() => {
+        const previous = jobById.get(storeId, orderId);
+        if (!previous || !getProjectTrackerCategory(categoryId)) return false;
+        if (monthLockById.get(storeId, previous.team_name, athensMonthOf(previous.closed_at))?.locked) return false;
+        updateJob.run(categoryId, null, null, 0, storeId, orderId);
+        if (sourceCategoryId) updateJobScoring.run(null, sourceCategoryId, 0, storeId, orderId);
+        insertAudit.run(storeId, orderId, 'SYSTEM:CATEGORY_MIGRATION', previous.category_id, categoryId, previous.points_override, null, changedAt);
+        return true;
+      })();
+    },
+    migrateCategoryCatalog(changedAt = new Date().toISOString()) {
+      return migrateCategoryCatalogTransaction(changedAt);
+    },
     ensureCutoverAt(now = new Date()) {
       const value = now instanceof Date ? now.toISOString() : new Date(now).toISOString();
       database.prepare(`
@@ -298,6 +351,10 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
         changedAt,
         scoringVersion,
       );
+    },
+    updateJobTeamName(storeId, orderId, teamName) {
+      if (!teamName) return false;
+      return updateJobTeamName.run(teamName, storeId, orderId, teamName).changes > 0;
     },
     getJob(storeId, orderId) {
       const row = jobById.get(storeId, orderId);

@@ -229,7 +229,7 @@ test('fetchOrders identifies orders/filter rejection after a successful re-login
   assert.equal(loginCount, 2);
 });
 
-test('dailyWorkorders prefers the assigned team name and falls back to its group name', async () => {
+test('dailyWorkorders keeps the assigned team separate from its group name', async () => {
   const requests = [];
   const client = new FionaClient(clientConfig, {
     post: async (url, payload, options) => {
@@ -252,8 +252,18 @@ test('dailyWorkorders prefers the assigned team name and falls back to its group
   const result = await client.dailyWorkorders('14.10.2026', ['395']);
 
   assert.deepEqual(result, [
-    { orderId: '123', orderStatus: 'COMPLETED', teamName: 'Team Alpha' },
-    { orderId: '124', orderStatus: 'COMPLETED', teamName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS' },
+    {
+      orderId: '123',
+      orderStatus: 'COMPLETED',
+      teamName: 'Team Alpha',
+      teamGroupName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS',
+    },
+    {
+      orderId: '124',
+      orderStatus: 'COMPLETED',
+      teamName: null,
+      teamGroupName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS',
+    },
   ]);
   assert.equal(requests[1].url, 'https://example.test/workorders');
   assert.deepEqual(requests[1].payload, {

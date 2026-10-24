@@ -46,6 +46,37 @@ test('month and day queries use Athens calendar dates and return no customer fie
   });
 });
 
+test('catalog migration re-maps legacy and corrected jobs but keeps locked months', () => {
+  withRepository((repository) => {
+    const legacy = { sourceCategoryId: 'Fixed|On-Site Support NGA', categoryId: 'soho_installation_impairment' };
+    repository.insertJob(job({ orderId: 'legacy', ...legacy, pointsOverride: 15 }));
+    repository.insertJob(job({ orderId: 'nga-activation', sourceCategoryId: 'NGA Activation', categoryId: 'ftth_installation' }));
+    repository.insertJob(job({ orderId: 'corrected', ...legacy }));
+    repository.correctJob({
+      storeId: 'alexandroupoli',
+      orderId: 'corrected',
+      teamName: 'Team One',
+      categoryId: 'soho_installation_impairment',
+      pointsOverride: 99,
+      changedAt: '2026-10-18T11:00:00.000Z',
+    });
+    repository.insertJob(job({ orderId: 'locked', ...legacy, teamName: 'Locked Team', closedAt: '2026-09-10T10:00:00.000Z' }));
+    repository.setMonthLock({
+      storeId: 'alexandroupoli', teamName: 'Locked Team', month: '2026-09', locked: true, changedAt: '2026-10-01T00:00:00.000Z',
+    });
+
+    assert.equal(repository.migrateCategoryCatalog('2026-10-20T10:00:00.000Z'), 3);
+    assert.equal(repository.getJob('alexandroupoli', 'legacy').categoryId, 'copper_impairment');
+    assert.equal(repository.getJob('alexandroupoli', 'legacy').points, 15);
+    assert.equal(repository.getJob('alexandroupoli', 'nga-activation').categoryId, 'other_works');
+    assert.equal(repository.getJob('alexandroupoli', 'corrected').categoryId, 'copper_impairment');
+    assert.equal(repository.getJob('alexandroupoli', 'corrected').points, 15);
+    assert.equal(repository.getJob('alexandroupoli', 'locked').categoryId, 'soho_installation_impairment');
+    assert.equal(repository.getAudit('alexandroupoli', 'legacy')[0].editorTeam, 'SYSTEM:CATEGORY_MIGRATION');
+    assert.equal(repository.migrateCategoryCatalog(), 0);
+  });
+});
+
 test('unmapped jobs remain unscored and corrections are audited', () => {
   withRepository((repository) => {
     repository.insertJob(job({ categoryId: null, sourceLabel: 'Unrecognized Fiona service' }));
