@@ -6,6 +6,7 @@ import {
   formatTimer,
 } from './ticketFormatters.js';
 import { getSlaState } from './ticketModel.js';
+import { greekServiceType } from './serviceTypes.js';
 
 export default function TicketCard({ ticket, now, showStore }) {
   const sla = getSlaState(ticket, now);
@@ -47,6 +48,7 @@ export default function TicketCard({ ticket, now, showStore }) {
   return <article className={`ticket-card ${critical ? 'is-critical' : warning ? 'is-warning' : ''}`}>
     <div className="ticket-header"><div className="ticket-ident"><p className="ticket-id">{ticket.serviceOrderId}</p>{ticket.priority && <span className={`priority-badge priority-${ticket.priorityLevel}`}>{ticket.priority}</span>}{showStore && <span className="store-badge">{ticket.storeName}</span>}</div><span className={`status-badge status-${ticket.status.toLowerCase().replaceAll(' ', '-')}`}>{ticket.status}</span></div>
     <h3 className="service-title">{ticket.title}</h3>
+    {greekServiceType(ticket.title) && <p className="service-type-gr">{greekServiceType(ticket.title)}</p>}
     <p className="customer-line"><Icon name="pin" size={15} /><span><strong>{ticket.customerLastName}</strong> · {ticket.address}{ticket.city && !ticket.address.toLowerCase().includes(ticket.city.toLowerCase()) ? `, ${ticket.city}` : ''}</span></p>
     {appointmentAt && <div className="appointment-row"><Icon name="clock" size={16} /><span>Ραντεβού: <strong>{appointmentAt}</strong>{ticket.durationMinutes ? ` • ${ticket.durationMinutes}'` : ''}</span></div>}
     {appointmentAt && ticket.teamName && <div className="team-assignment"><Icon name="user" size={15} /><span>Συνεργείο: <strong>{ticket.teamName}</strong></span></div>}
