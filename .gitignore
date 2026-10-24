@@ -3,6 +3,7 @@ node_modules/
 .mcp.json
 backend/.env
 backend/data/
+backend/exports/*.json
 frontend/.env
 frontend/dist/
 project-tracker/dist/

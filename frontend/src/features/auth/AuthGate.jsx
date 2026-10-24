@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { clearCachedTickets, pruneCachedTickets } from '../tickets/ticketStorage.js';
 
 const originalFetch = window.fetch.bind(window);
 // Any 401 from the API (expired session) sends the user back to the login form.
@@ -19,11 +20,30 @@ export default function AuthGate({ children }) {
 
   useEffect(() => {
     originalFetch('/api/session')
-      .then((response) => setState(response.ok ? 'in' : 'out'))
-      .catch(() => setState('out'));
-    const onUnauthorized = () => setState('out');
+      .then((response) => {
+        if (response.ok) {
+          pruneCachedTickets();
+          setState('in');
+          return;
+        }
+        clearCachedTickets();
+        setState('out');
+      })
+      .catch(() => {
+        clearCachedTickets();
+        setState('out');
+      });
+    const onUnauthorized = () => {
+      clearCachedTickets();
+      setState('out');
+    };
+    const onLogout = () => setState('out');
     window.addEventListener('fiona-unauthorized', onUnauthorized);
-    return () => window.removeEventListener('fiona-unauthorized', onUnauthorized);
+    window.addEventListener('fiona-logged-out', onLogout);
+    return () => {
+      window.removeEventListener('fiona-unauthorized', onUnauthorized);
+      window.removeEventListener('fiona-logged-out', onLogout);
+    };
   }, []);
 
   async function submit(event) {
