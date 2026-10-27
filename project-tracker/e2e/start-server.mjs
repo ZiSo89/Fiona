@@ -23,7 +23,8 @@ const repository = createProjectTrackerRepository(dbPath);
 const at = (secondsAgo) => new Date(Date.now() - secondsAgo * 1000).toISOString();
 const base = { importedAt: at(0), sourceCategoryId: null };
 repository.insertJob({ ...base, storeId: 'alexandroupoli', orderId: 'order-1', teamName: 'Team One', closedAt: at(120), sourceLabel: 'Unknown service', categoryId: null });
-repository.insertJob({ ...base, storeId: 'alexandroupoli', orderId: 'order-2', teamName: 'Team One', closedAt: at(60), sourceLabel: 'FTTH Installation', categoryId: 'ftth_installation' });
+repository.insertJob({ ...base, storeId: 'alexandroupoli', orderId: 'order-2', teamName: 'Team One', closedAt: at(60), sourceLabel: 'FTTH Installation', categoryId: 'ftth_installation', scoringVersion: 2 });
+repository.insertJob({ ...base, storeId: 'alexandroupoli', orderId: 'order-3', teamName: 'Team One', closedAt: at(30), sourceLabel: 'Cabling repair and maintenance', categoryId: 'cabling_repair', pointsOverride: 50 });
 repository.insertJob({ ...base, storeId: 'komotini', orderId: 'order-1', teamName: 'Team Two', closedAt: at(30), sourceLabel: 'DTH TV Impairment', categoryId: 'dth_tv_impairment' });
 repository.close();
 

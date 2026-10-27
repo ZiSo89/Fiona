@@ -10,6 +10,7 @@
   --ink: #1c302d;
   --muted: #71807b;
   --surface: #ffffff;
+  --calendar-cell: #edf3ee;
   --page: #f1f4ef;
   --line: #dce3dc;
   --line-strong: #cbd5cd;
@@ -28,6 +29,7 @@
   --ink: #f1f3f5;
   --muted: #adb4bc;
   --surface: #22272d;
+  --calendar-cell: #2b3239;
   --page: #171a1f;
   --line: #3b424b;
   --line-strong: #505862;
@@ -244,6 +246,19 @@ h2,
 .toolbar-button.editor-on {
   border-color: #89c3a7;
   background: #214f43;
+}
+
+.toolbar-button.editor-on:hover {
+  border-color: #b8f0ce;
+  background: #2e7158;
+  box-shadow: 0 0 0 2px rgb(184 240 206 / 20%);
+  color: #fff;
+}
+
+.toolbar-button.editor-on:active {
+  border-color: #d3ffe2;
+  background: #3a8b68;
+  transform: scale(0.97);
 }
 
 .icon-button {
@@ -469,7 +484,7 @@ h1 {
   padding: 9px 9px 8px;
   border: 1px solid var(--line);
   border-radius: 4px;
-  background: var(--surface);
+  background: var(--calendar-cell);
 }
 
 .calendar-day {
@@ -489,9 +504,9 @@ h1 {
 }
 
 .calendar-day.selected {
-  border-color: var(--forest);
-  background: var(--forest);
-  color: #f8fbf8;
+  border: 2px solid var(--forest-mid);
+  background: var(--calendar-cell);
+  color: var(--ink);
 }
 
 .day-number {
@@ -513,7 +528,7 @@ h1 {
 }
 
 .selected .day-points {
-  color: #f1f3f5;
+  color: var(--forest-mid);
 }
 
 .day-empty-mark {
@@ -717,11 +732,45 @@ h1 {
   cursor: pointer;
   font-size: 11px;
   font-weight: 700;
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 100ms ease;
+}
+
+.save-correction:hover:not(:disabled) {
+  border-color: #2d8a68;
+  background: #2d8a68;
+  box-shadow: 0 3px 10px rgb(31 106 90 / 24%);
+}
+
+.save-correction:active:not(:disabled) {
+  border-color: #15533e;
+  background: #15533e;
+  transform: scale(0.985);
 }
 
 .save-correction:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.save-correction.needs-save:not(:disabled) {
+  border-color: #f59e0b;
+  background: #f59e0b;
+  color: #1a1203;
+  animation: save-pulse 1.6s ease-in-out infinite;
+}
+
+.save-correction.needs-save:hover:not(:disabled) {
+  border-color: #fbbf24;
+  background: #fbbf24;
+}
+
+@keyframes save-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgb(245 158 11 / 55%); }
+  50% { box-shadow: 0 0 0 6px rgb(245 158 11 / 0%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .save-correction.needs-save:not(:disabled) { animation: none; }
 }
 
 .job-greek-label {
@@ -779,6 +828,11 @@ h1 {
   gap: 5px;
 }
 
+.category-option-wrap {
+  display: grid;
+  gap: 4px;
+}
+
 .category-option {
   display: flex;
   align-items: center;
@@ -831,6 +885,40 @@ h1 {
   font-size: 11px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+}
+
+.category-point-choices {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px 4px 12px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.category-point-choice {
+  min-width: 46px;
+  min-height: 27px;
+  padding: 3px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.category-point-choice:hover {
+  border-color: var(--group-accent, var(--forest-mid));
+  background: var(--forest-soft);
+}
+
+.category-point-choice.is-selected {
+  border-color: var(--group-accent, var(--forest-mid));
+  background: var(--group-accent, var(--forest-mid));
+  color: #fff;
 }
 
 .category-clear {
@@ -1661,11 +1749,35 @@ h1 {
 
 .copy-button {
   display: inline-flex;
-  padding: 4px;
-  border: 0;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
   background: transparent;
   color: var(--muted);
   cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, transform 100ms ease;
+}
+
+.copy-button:hover {
+  border-color: var(--line-strong);
+  background: var(--forest-soft);
+  color: var(--forest-mid);
+}
+
+.copy-button:active {
+  background: var(--forest-mid);
+  color: #fff;
+  transform: scale(0.92);
+}
+
+.copy-button.is-copied {
+  border-color: #2d8a68;
+  background: #2d8a68;
+  color: #fff;
 }
 
 .job-status {

@@ -80,8 +80,14 @@ export async function syncClosedTickets({
       dailyOrders = await client.dailyWorkorders(workDate, serviceGroups);
     } catch (error) {
       summary.failed += 1;
-      summary.failures.push({ workDate, stage: 'daily_workorders', status: error?.status ?? null });
-      onProgress(`${dateProgress}: failed to fetch workorders${error?.status ? ` (HTTP ${error.status})` : ''}.`);
+      const message = error?.message || String(error);
+      summary.failures.push({
+        workDate,
+        stage: 'daily_workorders',
+        status: error?.status ?? null,
+        message,
+      });
+      onProgress(`${dateProgress}: failed to fetch workorders${error?.status ? ` (HTTP ${error.status})` : ''}: ${message}`);
       continue;
     }
     onProgress(`${dateProgress}: found ${dailyOrders.length} workorders.`);

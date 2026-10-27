@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createProjectTrackerRepository } from '../src/repositories/projectTrackerRepository.js';
+import { mapProjectTrackerCategory } from '../src/services/projectTrackerCatalog.js';
 import { syncProjectTracker } from '../src/services/projectTrackerSync.js';
 
 async function withRepository(run) {
@@ -27,7 +28,7 @@ test('imports only Fiona-completed jobs after cutover and deduplicates repeat sy
         calls.push(['daily', date, groups]);
         return [{
           orderId: 'fiona-1',
-          teamName: 'NEW TECHNOLOGIES LTD KOMOTINI',
+          teamName: 'Install Team',
           teamGroupName: 'NEW TECHNOLOGIES LTD KOMOTINI',
           orderType: 'FTTH Installation',
         }];
@@ -39,7 +40,7 @@ test('imports only Fiona-completed jobs after cutover and deduplicates repeat sy
           orderStatus: 'COMPLETED',
           workOrderFinishedOnPremiseTime: '2026-10-18T10:00:00.000Z',
           serviceGroup: 'ALEXANDROUPOLI 395',
-          teamName: 'Install Team',
+          teamName: 'NEW TECHNOLOGIES LTD KOMOTINI',
           orderType: 'FTTH Installation',
           categoryId06: '5.10 Visit OK, Delivery OK',
         };
@@ -86,7 +87,7 @@ test('corrects a previously imported group name to the assigned team name', asyn
       async dailyWorkorders() {
         return [{
           orderId: 'fiona-grouped',
-          teamName: null,
+          teamName: 'Kostas Tektonidis',
           teamGroupName: 'NEW TECHNOLOGIES LTD KOMOTINI',
         }];
       },
@@ -95,7 +96,7 @@ test('corrects a previously imported group name to the assigned team name', asyn
           orderStatus: 'COMPLETED',
           workOrderFinishedOnPremiseTime: '2026-10-18T10:00:00.000Z',
           serviceGroup: 'ALEXANDROUPOLI 395',
-          teamName: 'Kostas Tektonidis',
+          teamName: 'NEW TECHNOLOGIES LTD KOMOTINI',
         };
       },
     };
@@ -183,8 +184,72 @@ test('maps verified Fiona category values exactly and leaves unknown values unma
       wait: async () => {},
       now: () => new Date('2026-10-18T12:00:00.000Z'),
     });
+
     assert.equal(repository.getJob('alexandroupoli', 'mapped').categoryId, 'ftth_installation');
     assert.equal(repository.getJob('alexandroupoli', 'unmapped').mapped, false);
+  });
+});
+
+test('maps copper and combined work separately and keeps double-team manual-only', () => {
+  assert.equal(mapProjectTrackerCategory({}, 'NGA Activation')?.id, 'copper_installation');
+  assert.equal(mapProjectTrackerCategory({}, 'CO Visit')?.id, 'copper_impairment');
+  assert.equal(mapProjectTrackerCategory({}, 'Combined Wind-AP')?.id, 'combined_work');
+  assert.equal(mapProjectTrackerCategory({}, 'FTTH Additional Cabling'), null);
+  assert.equal(mapProjectTrackerCategory({}, 'Double Team'), null);
+  assert.equal(mapProjectTrackerCategory({ 'FTTH Additional Cabling': 'double_team' }, 'FTTH Additional Cabling'), null);
+});
+
+test('scores cabling at 50 only when the latest comment confirms installation or routing', async () => {
+  await withRepository(async (repository) => {
+    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    const comments = {
+      installed: 'Έγινε εγκατάσταση.',
+      routed: 'Έγινε όδευση.',
+      incomplete: 'Η εργασία ολοκληρώθηκε.',
+      'routing-only': 'Έγινε όδευση στο σημείο.',
+      'standalone-routing': 'Η όδευση.',
+      'reverse-order': 'Η όδευση έγινε.',
+      'standalone-installation': 'Η εγκατάσταση.',
+    };
+    const client = {
+      async dailyWorkorders() {
+        return Object.keys(comments).map((orderId) => ({
+          orderId,
+          teamName: 'Team One',
+          orderType: 'Cabling repair and maintenance',
+        }));
+      },
+      async orderDetails(orderId) {
+        return {
+          orderId,
+          orderStatus: 'COMPLETED',
+          workOrderFinishedOnPremiseTime: '2026-10-18T10:00:00.000Z',
+          serviceGroup: 'ALEXANDROUPOLI 395',
+        };
+      },
+      async fetchLatestCommentWithSession(orderId) {
+        return { text: comments[orderId] };
+      },
+    };
+
+    await syncProjectTracker({
+      stores: [store],
+      clients: new Map([['alexandroupoli', client]]),
+      repository,
+      lookbackDays: 1,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      wait: async () => {},
+      now: () => new Date('2026-10-18T12:00:00.000Z'),
+    });
+
+    assert.equal(repository.getJob('alexandroupoli', 'installed').points, 50);
+    assert.equal(repository.getJob('alexandroupoli', 'routed').points, 50);
+    assert.equal(repository.getJob('alexandroupoli', 'incomplete').points, 15);
+    assert.equal(repository.getJob('alexandroupoli', 'routing-only').points, 50);
+    assert.equal(repository.getJob('alexandroupoli', 'standalone-routing').points, 15);
+    assert.equal(repository.getJob('alexandroupoli', 'reverse-order').points, 15);
+    assert.equal(repository.getJob('alexandroupoli', 'standalone-installation').points, 15);
   });
 });
 
@@ -279,6 +344,7 @@ test('5.8.5 scores 15 without either routing phrase; 5.10 stays at 50', async ()
     const comments = {
       'no-routing': 'Δεν ολοκληρώθηκε η εργασία.',
       'reverse-routing': 'ΕΓΙΝΕ όδευση.',
+      'installation-only': 'Έγινε εγκατάσταση.',
     };
     const client = {
       async dailyWorkorders() {
@@ -286,6 +352,7 @@ test('5.8.5 scores 15 without either routing phrase; 5.10 stays at 50', async ()
           { orderId: 'existing-visit-ok', Categorization: { categoryId06: '5.10 Visit OK, Delivery OK' } },
           { orderId: 'no-routing', teamName: 'Team One', orderType: 'FTTH Installation' },
           { orderId: 'reverse-routing', teamName: 'Team One', orderType: 'FTTH Installation' },
+          { orderId: 'installation-only', teamName: 'Team One', orderType: 'FTTH Installation' },
           { orderId: 'visit-ok', teamName: 'Team One', orderType: 'FTTH Installation' },
         ];
       },
@@ -319,8 +386,9 @@ test('5.8.5 scores 15 without either routing phrase; 5.10 stays at 50', async ()
 
     assert.equal(repository.getJob('alexandroupoli', 'no-routing').points, 15);
     assert.equal(repository.getJob('alexandroupoli', 'reverse-routing').points, 50);
+    assert.equal(repository.getJob('alexandroupoli', 'installation-only').points, 15);
     assert.equal(repository.getJob('alexandroupoli', 'visit-ok').points, 50);
     assert.equal(repository.getJob('alexandroupoli', 'existing-visit-ok').points, 50);
-    assert.deepEqual(imported, ['no-routing', 'reverse-routing']);
+    assert.deepEqual(imported, ['no-routing', 'reverse-routing', 'installation-only']);
   });
 });

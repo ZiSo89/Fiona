@@ -84,13 +84,15 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
   });
 
   router.put('/jobs/:orderId', auth.requireAuth, (req, res) => {
-    const { storeId, teamName, categoryId } = req.body ?? {};
+    const { storeId, teamName, categoryId, pointsOverride } = req.body ?? {};
     const orderId = String(req.params.orderId ?? '');
     if (!/^[\w-]{1,40}$/.test(orderId)) {
       return res.status(400).json({ success: false, message: 'Invalid order ID' });
     }
     if (typeof storeId !== 'string' || typeof teamName !== 'string'
-      || (categoryId !== null && !getProjectTrackerCategory(categoryId))) {
+      || (categoryId !== null && !getProjectTrackerCategory(categoryId))
+      || (pointsOverride !== undefined && pointsOverride !== null
+        && (!Number.isInteger(pointsOverride) || pointsOverride < 0 || pointsOverride > 1000))) {
       return res.status(400).json({ success: false, message: 'Invalid tracker correction' });
     }
     if (!canAccessTeam(req.trackerEditor, storeId, teamName)) {
@@ -103,6 +105,7 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
         orderId,
         teamName,
         categoryId,
+        pointsOverride,
         allowLocked: req.trackerEditor.role === 'admin',
         changedAt: new Date().toISOString(),
       });

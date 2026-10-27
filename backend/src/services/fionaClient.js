@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { config } from '../config.js';
+import { cleanTeamName } from './orderNormalizer.js';
 
 function createRequestError(operation, error) {
   const status = error?.response?.status;
@@ -167,8 +168,8 @@ export class FionaClient {
     return (Array.isArray(payload.UserTeams) ? payload.UserTeams : []).flatMap((team) => (
       (Array.isArray(team?.TeamWorkOrders) ? team.TeamWorkOrders : []).map((workorder) => ({
         ...workorder,
-        teamName: workorder?.teamName ?? null,
-        teamGroupName: team?.teamName ?? null,
+        teamName: cleanTeamName(workorder?.teamName) ?? cleanTeamName(team?.teamName),
+        teamGroupName: cleanTeamName(workorder?.serviceGroupName),
       }))
     ));
   }

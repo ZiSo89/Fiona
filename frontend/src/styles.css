@@ -560,8 +560,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .sla-strip > span { display: grid; gap: 3px; min-width: 0; }
 .team-assignment { display: flex; align-items: center; gap: 7px; margin: -4px 0 12px; color: var(--muted); font-size: 0.72rem; }
 .team-assignment svg { flex: 0 0 auto; color: var(--details); }
-.appointment-row { display: flex; align-items: center; gap: 7px; margin: -4px 0 8px; color: #93c5fd; font-size: 0.82rem; }
-.appointment-row strong { color: white; font-weight: 800; }
+.appointment-row { display: flex; align-items: center; gap: 7px; margin: -4px 0 8px; color: #93c5fd; font-size: 0.72rem; }
+.appointment-row strong { color: white; font-weight: 400; }
 .team-assignment strong { color: #e2e8f0; font-weight: 700; }
 .created-at, .updated-at { margin: 4px 0 0; color: var(--muted); font-size: 0.68rem; line-height: 1.4; }
 .updated-at { margin-bottom: 8px; }
@@ -676,12 +676,16 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .sla-strip.critical b { background: var(--red); }
 .sla-strip.warning b { background: var(--amber); color: #111; }
 .countdown { font-family: ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; font-weight: 600; }
-.customer-line { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 12px; color: #c0c8d0; font-size: 0.78rem; line-height: 1.4; }
-.customer-line svg { flex: 0 0 auto; margin-top: 2px; color: var(--details); }
-.customer-line strong { color: var(--text); font-weight: 600; }
+.customer-line { display: grid; gap: 4px; margin: 0 0 12px; padding: 10px 12px; border-left: 4px solid #00b8d4; border-radius: 8px; background: rgb(255 255 255 / 6%); color: #e6ebf0; }
+.customer-address-row { display: flex; align-items: flex-start; gap: 8px; margin: 0; min-width: 0; }
+.customer-address-row svg { flex: 0 0 auto; margin-top: 3px; color: #00d4f0; }
+.customer-name { color: #fff; font-size: 1.08rem; font-weight: 800; line-height: 1.2; letter-spacing: 0.01em; }
+.customer-address { font-size: 0.92rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
 .card-action { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--text); font-size: 0.78rem; font-weight: 600; text-decoration: none; }
 .card-action svg { color: var(--blue); }
+.card-action-call { font-size: 1rem; font-weight: 700; }
+.card-action-call span { font-family: ui-monospace, Consolas, monospace; }
 .card-action small { color: var(--details); font-family: ui-monospace, Consolas, monospace; font-size: 0.62rem; }
 .card-action.disabled { color: var(--details); }
 .ticket-details { border-top: 1px solid var(--line); margin-top: 6px; }
@@ -868,4 +872,14 @@ button.done-card:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px
   .done-status { min-height: 22px; padding: 0 6px; font-size: 0.57rem; }
   .done-card .done-card-meta { font-size: 0.64rem; }
   .done-card .done-chevron { width: 40px; height: 40px; }
+}
+
+@media (max-width: 600px) {
+  .ticket-card { padding: 16px; }
+  .ticket-card > * + * { margin-top: 10px; }
+  .customer-line { padding: 12px 14px; gap: 6px; }
+  .site-chips { gap: 8px; }
+  .latest-comment, .next-action, .cli-row, .sla-strip { margin-top: 10px; margin-bottom: 0; }
+  .card-actions { gap: 10px; margin-top: 14px; }
+  .ticket-details { margin-top: 14px; }
 }

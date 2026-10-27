@@ -219,7 +219,7 @@ test('normalizeOrders flattens Fiona daily team workorders', () => {
   const result = normalizeOrders({
     UserTeams: [
       {
-        teamName: 'Field Team North',
+        teamName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS',
         TeamWorkOrders: [
           {
             orderId: 'WO-42',
@@ -229,6 +229,7 @@ test('normalizeOrders flattens Fiona daily team workorders', () => {
             houseNumber: '10',
             telNumber1: '6900000000',
             orderStatus: 'APPOINTMENT',
+            teamName: 'Crew One',
             workOrderScheduledTimeFrom: '2026-10-12 11:00:00',
             planServiceDescription: 'Επισκευή',
           },
@@ -241,5 +242,6 @@ test('normalizeOrders flattens Fiona daily team workorders', () => {
   assert.equal(result.tickets[0].id, 'WO-42');
   assert.equal(result.tickets[0].customer.name, 'ΠΑΠΑΔΟΠΟΥΛΟΣ');
   assert.equal(result.tickets[0].customer.phonePrimary, '6900000000');
-  assert.equal(result.tickets[0].order.serviceGroup, 'Field Team North');
+  assert.equal(result.tickets[0].order.serviceGroup, 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS');
+  assert.equal(result.tickets[0].dispatch.assignedTeam, 'Crew One');
 });

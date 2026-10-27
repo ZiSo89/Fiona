@@ -68,7 +68,7 @@ test('catalog migration re-maps legacy and corrected jobs but keeps locked month
     assert.equal(repository.migrateCategoryCatalog('2026-10-20T10:00:00.000Z'), 3);
     assert.equal(repository.getJob('alexandroupoli', 'legacy').categoryId, 'copper_impairment');
     assert.equal(repository.getJob('alexandroupoli', 'legacy').points, 15);
-    assert.equal(repository.getJob('alexandroupoli', 'nga-activation').categoryId, 'other_works');
+    assert.equal(repository.getJob('alexandroupoli', 'nga-activation').categoryId, 'copper_installation');
     assert.equal(repository.getJob('alexandroupoli', 'corrected').categoryId, 'copper_impairment');
     assert.equal(repository.getJob('alexandroupoli', 'corrected').points, 15);
     assert.equal(repository.getJob('alexandroupoli', 'locked').categoryId, 'soho_installation_impairment');
@@ -92,6 +92,7 @@ test('unmapped jobs remain unscored and corrections are audited', () => {
       pointsOverride: 21,
       changedAt: '2026-10-18T11:00:00.000Z',
     });
+
     assert.equal(corrected.categoryName, 'DTH TV Impairment');
     assert.equal(corrected.points, 21);
     assert.equal(repository.getAudit('alexandroupoli', 'order-1').length, 1);
@@ -103,6 +104,76 @@ test('unmapped jobs remain unscored and corrections are audited', () => {
       pointsOverride: null,
       changedAt: '2026-10-18T12:00:00.000Z',
     }), null);
+  });
+});
+
+test('manually selecting cabling saves the 15-point score over its automatic score', () => {
+  withRepository((repository) => {
+    repository.insertJob(job({
+      categoryId: 'cabling_repair',
+      pointsOverride: 50,
+      sourceLabel: 'Cabling Repair and Maintenance',
+    }));
+
+    const corrected = repository.correctJob({
+      storeId: 'alexandroupoli',
+      orderId: 'order-1',
+      teamName: 'Team One',
+      categoryId: 'cabling_repair',
+      pointsOverride: 15,
+      changedAt: '2026-10-18T11:00:00.000Z',
+    });
+
+    assert.equal(corrected.pointsOverride, 15);
+    assert.equal(corrected.points, 15);
+  });
+});
+
+test('manual installation and cabling scores survive automatic scoring updates', () => {
+  withRepository((repository) => {
+    repository.insertJob(job({ categoryId: 'ftth_installation' }));
+    repository.insertJob(job({ orderId: 'order-2', categoryId: 'cabling_repair' }));
+    repository.correctJob({
+      storeId: 'alexandroupoli',
+      orderId: 'order-1',
+      teamName: 'Team One',
+      categoryId: 'ftth_installation',
+      pointsOverride: 15,
+      changedAt: '2026-10-18T11:00:00.000Z',
+    });
+    repository.correctJob({
+      storeId: 'alexandroupoli',
+      orderId: 'order-2',
+      teamName: 'Team One',
+      categoryId: 'cabling_repair',
+      pointsOverride: 50,
+      changedAt: '2026-10-18T11:00:00.000Z',
+    });
+
+    assert.equal(repository.updateJobScoring(
+      'alexandroupoli',
+      'order-1',
+      50,
+      '2026-10-18T12:00:00.000Z',
+      'FTTH|activation',
+      1,
+    ), false);
+    assert.equal(repository.updateJobScoring(
+      'alexandroupoli',
+      'order-2',
+      15,
+      '2026-10-18T12:00:00.000Z',
+      'Cabling|repair',
+      1,
+    ), false);
+    const updated = repository.getJob('alexandroupoli', 'order-1');
+    const updatedCabling = repository.getJob('alexandroupoli', 'order-2');
+    assert.equal(updated.pointsOverride, 15);
+    assert.equal(updated.pointsOverrideManual, true);
+    assert.equal(updated.points, 15);
+    assert.equal(updatedCabling.pointsOverride, 50);
+    assert.equal(updatedCabling.pointsOverrideManual, true);
+    assert.equal(updatedCabling.points, 50);
   });
 });
 

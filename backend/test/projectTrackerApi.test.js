@@ -108,6 +108,21 @@ test('corrections require a team session and stay scoped to its store/team', asy
     });
     assert.equal(corrected.status, 200);
     assert.equal((await corrected.json()).job.points, 18);
+
+    const cablingCorrection = await fetch(`${url}/api/tracker/jobs/order-1`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json', cookie },
+      body: JSON.stringify({
+        storeId: 'alexandroupoli',
+        teamName: 'Team One',
+        categoryId: 'cabling_repair',
+        pointsOverride: 15,
+      }),
+    });
+    const cablingJob = await cablingCorrection.json();
+    assert.equal(cablingCorrection.status, 200);
+    assert.equal(cablingJob.job.pointsOverride, 15);
+    assert.equal(cablingJob.job.points, 15);
   });
 });
 

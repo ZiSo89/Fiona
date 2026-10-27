@@ -1,4 +1,4 @@
-import { parseFionaDate } from './orderNormalizer.js';
+import { cleanTeamName, parseFionaDate } from './orderNormalizer.js';
 
 function toIsoDate(value) {
   return parseFionaDate(value)?.toISOString() || null;
@@ -53,7 +53,7 @@ export function buildClosedTicketRecord(order, details, workOrderData, comment, 
     customer_id: String(lookup('customerId') ?? '') || null,
     account_afm: String(lookup('accountAFM') ?? '') || null,
     customer_name: name,
-    team_name: String(lookup('teamName') ?? order?.teamName ?? '') || null,
+    team_name: cleanTeamName(order?.teamName) || cleanTeamName(findOrderField(details, 'teamName')),
     city: String(lookup('city') ?? '') || null,
     street: String(lookup('street') ?? '') || null,
     house_number: String(lookup('houseNumber') ?? '') || null,

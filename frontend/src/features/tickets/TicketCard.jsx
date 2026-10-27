@@ -40,6 +40,8 @@ export default function TicketCard({ ticket, now, showStore }) {
     none: 'Ολοκλήρωση: χωρίς προθεσμία',
   }[sla.kind];
   const callRemaining = ticket.showCallDeadline ? callRemainingMs : null;
+  const customerAddress = `${ticket.address}${ticket.city && !ticket.address.toLowerCase().includes(ticket.city.toLowerCase()) ? `, ${ticket.city}` : ''}`;
+  const postalCodeMatch = customerAddress.match(/^(.*?)(,\s*|\s+)(\d{5})(?=\s*(?:,|$))(.*)$/);
   const callLine = callRemaining === null || Number.isNaN(callRemaining) ? null : {
     remainingMs: callRemaining,
     kind: callRemaining <= 0 ? 'critical' : callRemaining <= 3600000 ? 'warning' : 'normal',
@@ -49,8 +51,8 @@ export default function TicketCard({ ticket, now, showStore }) {
     <div className="ticket-header"><div className="ticket-ident"><p className="ticket-id">{ticket.serviceOrderId}</p>{ticket.priority && <span className={`priority-badge priority-${ticket.priorityLevel}`}>{ticket.priority}</span>}{showStore && <span className="store-badge">{ticket.storeName}</span>}</div><span className={`status-badge status-${ticket.status.toLowerCase().replaceAll(' ', '-')}`}>{ticket.status}</span></div>
     <h3 className="service-title">{ticket.title}</h3>
     {greekServiceType(ticket.title) && <p className="service-type-gr">{greekServiceType(ticket.title)}</p>}
-    <p className="customer-line"><Icon name="pin" size={15} /><span><strong>{ticket.customerLastName}</strong> · {ticket.address}{ticket.city && !ticket.address.toLowerCase().includes(ticket.city.toLowerCase()) ? `, ${ticket.city}` : ''}</span></p>
-    {appointmentAt && <div className="appointment-row"><Icon name="clock" size={16} /><span>Ραντεβού: <strong>{appointmentAt}</strong>{ticket.durationMinutes ? ` • ${ticket.durationMinutes}'` : ''}</span></div>}
+    <div className="customer-line"><strong className="customer-name">{ticket.customerLastName}</strong><p className="customer-address-row"><Icon name="pin" size={15} /><span className="customer-address">{postalCodeMatch ? `${postalCodeMatch[1]}${postalCodeMatch[4]}` : customerAddress}</span></p></div>
+    {appointmentAt && <div className="appointment-row"><Icon name="clock" size={14} /><span>Ραντεβού: <strong>{appointmentAt}</strong></span></div>}
     {appointmentAt && ticket.teamName && <div className="team-assignment"><Icon name="user" size={15} /><span>Συνεργείο: <strong>{ticket.teamName}</strong></span></div>}
     {siteInfo.length > 0 && <ul className="site-chips">{siteInfo.map((info) => <li key={info}>{info}</li>)}</ul>}
     {ticket.problemDescription && <div className="ticket-context"><p><strong>Περιγραφή προβλήματος:</strong> {ticket.problemDescription}</p></div>}
@@ -60,7 +62,7 @@ export default function TicketCard({ ticket, now, showStore }) {
     {callLine && <div className={`sla-strip ${callLine.kind}`}><span className="sla-main"><Icon name={callLine.kind === 'normal' ? 'phone' : 'alert'} size={15} /><strong>{callLine.label}</strong><span className="countdown">{callLine.remainingMs <= 0 ? '-' : ''}{formatTimer(Math.abs(callLine.remainingMs))}</span></span></div>}
     <div className={`sla-strip ${critical ? 'critical' : warning ? 'warning' : 'normal'}`}><span className="sla-main"><Icon name={critical || warning || ticket.slaDateInvalid ? 'alert' : 'check'} size={15} /><strong>{slaSummary}</strong>{sla.remainingMs !== null && <span className="countdown">{sla.remainingMs <= 0 ? '-' : ''}{formatTimer(Math.abs(sla.remainingMs))}</span>}</span><b>{ticket.slaDateInvalid ? 'CHECK' : critical ? 'CRITICAL' : warning ? 'WARNING' : 'NORMAL'}</b></div>
     <div className="card-actions">
-      {ticket.contactPhone ? <a className="card-action" href={`tel:${ticket.contactPhone}`} aria-label={`Κλήση ${ticket.contactPhone}`}><Icon name="phone" size={16} />Κλήση<small>{ticket.contactPhone}</small></a> : <span className="card-action disabled"><Icon name="phone" size={16} />Χωρίς τηλέφωνο</span>}
+      {ticket.contactPhone ? <a className="card-action card-action-call" href={`tel:${ticket.contactPhone}`} aria-label={`Κλήση ${ticket.contactPhone}`}><Icon name="phone" size={16} /><span>{ticket.contactPhone.replace(/\D/g, '').length === 10 ? ticket.contactPhone.replace(/\D/g, '').replace(/^(\d{3})(\d{3})(\d{4})$/, '$1 $2 $3') : ticket.contactPhone}</span></a> : <span className="card-action disabled"><Icon name="phone" size={16} />Χωρίς τηλέφωνο</span>}
       {ticket.mapsUrl ? <a className="card-action" href={ticket.mapsUrl} target="_blank" rel="noreferrer"><Icon name="pin" size={16} />Χάρτης</a> : <a className="card-action" href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(ticket.address)}`} target="_blank" rel="noreferrer"><Icon name="pin" size={16} />Χάρτης</a>}
     </div>
     <details className="ticket-details">

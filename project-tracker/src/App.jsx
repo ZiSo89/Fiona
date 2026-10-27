@@ -38,16 +38,19 @@ const categoryGroups = [
 
 // selectable: false keeps the category displayable for existing jobs without offering it in the picker.
 const categories = [
-  { id: 'ftth_installation', label: 'Οπτική εγκατάσταση', source: 'FTTH Activation', points: 50, group: 'installation', Icon: Zap },
+  { id: 'ftth_installation', label: 'Εγκατάσταση Οπτικής', source: 'FTTH Activation', points: 50, group: 'installation', Icon: Zap },
   { id: 'fwa_installation', label: 'Εγκατάσταση 5G', source: 'CPE Installation FWA', points: 35, group: 'installation', Icon: Wifi },
-  { id: 'dth_tv_installation', label: 'Δορυφορική εγκατάσταση', source: 'CPE Installation DTH TV', points: 25, group: 'installation', Icon: Satellite },
+  { id: 'dth_tv_installation', label: 'Εγκατάσταση Δορυφορικής', source: 'CPE Installation DTH TV', points: 25, group: 'installation', Icon: Satellite },
   { id: 'canceled_eon_installation', label: 'Εγκατάσταση EON', source: 'CPE Installation', points: 5, group: 'installation', Icon: Router },
-  { id: 'ftth_impairment', label: 'Οπτική βλάβη', source: 'On-Site Support FTTH', points: 15, group: 'impairment', Icon: Wrench },
+  { id: 'ftth_impairment', label: 'Βλάβη Οπτικής', source: 'On-Site Support FTTH', points: 15, group: 'impairment', Icon: Wrench },
   { id: 'fwa_impairment', label: 'Βλάβη 5G', source: 'On-Site Support FWA', points: 15, group: 'impairment', Icon: Wrench },
-  { id: 'dth_tv_impairment', label: 'Δορυφορική βλάβη', source: 'On-Site Support DTH TV', points: 18, group: 'impairment', Icon: Wrench },
-  { id: 'copper_impairment', label: 'Βλάβη χαλκού', source: 'On-Site Support NGA / LLU, SI Bridging', points: 15, group: 'impairment', Icon: Wrench },
-  { id: 'other_works', label: 'Άλλες εργασίες', source: 'Χαλκός, router, συνδυαστικά, καμπίνα', points: 15, group: 'other', Icon: Package },
-  { id: 'cabling_repair', label: 'Καλωδίωση / νέα εγκατάσταση', source: 'Cabling repair and maintenance', points: 50, group: 'other', Icon: Cable, selectable: false },
+  { id: 'dth_tv_impairment', label: 'Βλάβη Δορυφορικής', source: 'On-Site Support DTH TV', points: 18, group: 'impairment', Icon: Wrench },
+  { id: 'copper_installation', label: 'Εγκατάσταση χαλκού', source: 'NGA Activation, CPE Installation NGA / LLU', points: 15, group: 'installation', Icon: Router },
+  { id: 'copper_impairment', label: 'Βλάβη χαλκού', source: 'On-Site Support NGA / LLU, SI Bridging, CO Visit', points: 15, group: 'impairment', Icon: Wrench },
+  { id: 'combined_work', label: 'Συνδιαστικό', source: 'Combined Wind-AP / OTE-WIND', points: 15, group: 'other', Icon: Package },
+  { id: 'other_works', label: 'Άλλες εργασίες', source: 'Λοιπές εργασίες', points: 5, group: 'other', Icon: Package },
+  { id: 'cabling_repair', label: 'Καλωδίωση / νέα εγκατάσταση', source: 'Cabling repair and maintenance', points: 15, group: 'other', Icon: Cable },
+  { id: 'double_team', label: 'Διπλό Συνεργείο', source: 'Μόνο χειροκίνητη επιλογή', points: 100, group: 'other', Icon: Copy },
   { id: 'soho_installation_impairment', label: 'SOHO', source: 'SOHO Installation / Impairment', points: 20, group: 'other', Icon: Package, selectable: false },
 ];
 
@@ -60,10 +63,11 @@ function pointsNote(job) {
   const base = categories.find((category) => category.id === job.categoryId)?.points;
   if (!job.mapped || base === undefined || job.points === base) return '';
   if (job.correctedAt) return `Πόντοι προσαρμοσμένοι χειροκίνητα (βασικοί ${base})`;
+  if (job.categoryId === 'cabling_repair' && job.points === 50) return 'Ολοκληρώθηκε εγκατάσταση ή όδευση';
   return `${job.points} από ${base} πόντους, δεν έγινε η όδευση`;
 }
 
-function CategoryPicker({ value, current, onChange }) {
+function CategoryPicker({ value, current, pointsValue, onChange, onPointsChange }) {
   return (
     <div className="category-picker">
       {categoryGroups.map((group) => {
@@ -75,20 +79,37 @@ function CategoryPicker({ value, current, onChange }) {
             <h4>{group.label}</h4>
             <div className="category-options">
               {options.map(({ id, label, source, points, Icon }) => (
-                <button
-                  type="button"
-                  className={`category-option${value === id ? ' is-selected' : ''}`}
-                  aria-pressed={value === id}
-                  key={id}
-                  onClick={() => onChange(id)}
-                >
-                  <Icon size={16} />
-                  <span className="category-option-text">
-                    <strong>{label}</strong>
-                    <small>{source}</small>
-                  </span>
-                  <span className="category-option-points">{points}</span>
-                </button>
+                <div className="category-option-wrap" key={id}>
+                  <button
+                    type="button"
+                    className={`category-option${value === id ? ' is-selected' : ''}`}
+                    aria-pressed={value === id}
+                    onClick={() => onChange(id)}
+                  >
+                    <Icon size={16} />
+                    <span className="category-option-text">
+                      <strong>{label}</strong>
+                      <small>{source}</small>
+                    </span>
+                    <span className="category-option-points">{points}</span>
+                  </button>
+                  {value === id && ['ftth_installation', 'cabling_repair'].includes(id) && (
+                    <div className="category-point-choices" role="group" aria-label={`${label}: επιλογή πόντων`}>
+                      <span>Πόντοι:</span>
+                      {[15, 50].map((choice) => (
+                        <button
+                          type="button"
+                          className={`category-point-choice${pointsValue === choice ? ' is-selected' : ''}`}
+                          aria-pressed={pointsValue === choice}
+                          key={choice}
+                          onClick={() => onPointsChange(choice)}
+                        >
+                          {choice}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </section>
@@ -135,6 +156,64 @@ function profileKey(profile) {
 
 function jobKey(job) {
   return `${job.storeId}::${job.orderId}`;
+}
+
+function applyJobDraft(job, draft) {
+  if (!draft) return job;
+  const categoryId = draft.categoryId || null;
+  const category = categories.find((entry) => entry.id === categoryId);
+  const pointsOverride = draft.pointsOverride === undefined ? job.pointsOverride : draft.pointsOverride;
+  return {
+    ...job,
+    categoryId,
+    categoryName: category?.label ?? null,
+    pointsOverride,
+    points: pointsOverride ?? category?.points ?? 0,
+    mapped: Boolean(category),
+  };
+}
+
+function updateMonthJob(monthData, previousJob, nextJob) {
+  if (!monthData || !previousJob || !nextJob) return monthData;
+  const previousCategoryId = previousJob.categoryId || null;
+  const nextCategoryId = nextJob.categoryId || null;
+  const categoriesById = new Map(monthData.categories.map((entry) => [entry.categoryId || 'unmapped', { ...entry }]));
+  const previousKey = previousCategoryId || 'unmapped';
+  const nextKey = nextCategoryId || 'unmapped';
+  if (previousKey === nextKey) {
+    const entry = categoriesById.get(previousKey);
+    if (entry) entry.points += nextJob.points - previousJob.points;
+  } else {
+    const previousEntry = categoriesById.get(previousKey);
+    if (previousEntry) {
+      previousEntry.jobCount -= 1;
+      previousEntry.points -= previousJob.points;
+      if (previousEntry.jobCount === 0) categoriesById.delete(previousKey);
+    }
+    const category = categories.find((entry) => entry.id === nextCategoryId);
+    const nextEntry = categoriesById.get(nextKey) || {
+      categoryId: nextCategoryId,
+      categoryName: category?.label ?? 'Χωρίς αντιστοίχιση',
+      jobCount: 0,
+      points: 0,
+      mapped: Boolean(category),
+    };
+    nextEntry.jobCount += 1;
+    nextEntry.points += nextJob.points;
+    categoriesById.set(nextKey, nextEntry);
+  }
+  const categoryOrder = new Map(categories.map((entry, index) => [entry.id, index]));
+  return {
+    ...monthData,
+    totalPoints: monthData.totalPoints + nextJob.points - previousJob.points,
+    categories: [...categoriesById.values()].sort((left, right) => (
+      (categoryOrder.get(left.categoryId) ?? Number.MAX_SAFE_INTEGER)
+      - (categoryOrder.get(right.categoryId) ?? Number.MAX_SAFE_INTEGER)
+    )),
+    days: monthData.days.map((day) => day.date === dayFormatter.format(new Date(previousJob.closedAt))
+      ? { ...day, points: day.points + nextJob.points - previousJob.points }
+      : day),
+  };
 }
 
 function readTrackerView() {
@@ -189,23 +268,23 @@ function formatDate(value) {
 }
 
 const greekServiceTypes = {
-  'ftth activation': 'Εγκατάσταση οπτικής (FTTH)',
-  'on-site support ftth': 'Βλάβη οπτικής (FTTH)',
+  'ftth activation': 'Εγκατάσταση Οπτικής (FTTH)',
+  'on-site support ftth': 'Βλάβη Οπτικής (FTTH)',
   'cpe installation fwa': 'Εγκατάσταση 5G (FWA)',
   'on-site support fwa': 'Βλάβη 5G (FWA)',
-  'nga activation': 'Σύνδεση χαλκού',
+  'nga activation': 'Εγκατάσταση χαλκού',
   'on-site support nga': 'Βλάβη χαλκού',
   'on-site support llu': 'Βλάβη χαλκού',
   'si bridging': 'Βλάβη χαλκού',
-  'cpe installation nga': 'Εγκατάσταση router',
-  'cpe installation llu': 'Εγκατάσταση router',
+  'cpe installation nga': 'Εγκατάσταση χαλκού',
+  'cpe installation llu': 'Εγκατάσταση χαλκού',
   'cpe installation': 'Εγκατάσταση EON',
-  'cpe installation dth tv': 'Δορυφορική: εγκατάσταση',
-  'on-site support dth tv': 'Δορυφορική: βλάβη',
-  'combined wind-ap': 'Συνδυαστικό',
-  'combined visit ote-wind': 'Συνδυαστικό',
-  'combined llu visit ote-wind': 'Συνδυαστικό',
-  'co visit': 'Καμπίνα (CO Visit)',
+  'cpe installation dth tv': 'Εγκατάσταση Δορυφορικής',
+  'on-site support dth tv': 'Βλάβη Δορυφορικής',
+  'combined wind-ap': 'Συνδιαστικό',
+  'combined visit ote-wind': 'Συνδιαστικό',
+  'combined llu visit ote-wind': 'Συνδιαστικό',
+  'co visit': 'Βλάβη χαλκού (CO Visit)',
   'cabling repair and maintenance': 'Νέα εγκατάσταση / επισκευή καλωδίωσης',
 };
 
@@ -497,21 +576,28 @@ function App() {
   const saveCorrection = async (job) => {
     const key = jobKey(job);
     const draft = drafts[key] || { categoryId: job.categoryId || '' };
+    const previousJob = dayJobs.find((entry) => jobKey(entry) === key) || job;
     setSavingJobId(key);
     try {
-      await trackerRequest(`/jobs/${encodeURIComponent(job.orderId)}`, {
+      const data = await trackerRequest(`/jobs/${encodeURIComponent(job.orderId)}`, {
         method: 'PUT',
         body: JSON.stringify({
           storeId: selectedProfile.storeId,
           teamName: selectedProfile.teamName,
           categoryId: draft.categoryId || null,
+          ...(draft.pointsOverride !== undefined ? { pointsOverride: draft.pointsOverride } : {}),
         }),
       });
+      setDayJobs((current) => current.map((entry) => (jobKey(entry) === key ? data.job : entry)));
+      setMonthData((current) => current?.profileKey === selectedKey && current.month === month
+        ? updateMonthJob(current, previousJob, data.job)
+        : current);
       setDrafts((current) => {
         const next = { ...current };
         delete next[key];
         return next;
       });
+      setPickerJobId('');
       setRefreshTick((tick) => tick + 1);
     } catch (requestError) {
       setError(requestError.message);
@@ -530,9 +616,15 @@ function App() {
     }
   };
 
-  const filterOptions = [...dayJobs.reduce((map, job) => map.set(jobLabel(job), (map.get(jobLabel(job)) || 0) + 1), new Map())];
+  const dayJobsWithDrafts = dayJobs.map((job) => applyJobDraft(job, drafts[jobKey(job)]));
+  const liveMonthData = dayJobsWithDrafts.reduce(
+    (current, job, index) => updateMonthJob(current, dayJobs[index], job),
+    monthData,
+  );
+  const liveMonthTotal = liveMonthData?.totalPoints ?? 0;
+  const filterOptions = [...dayJobsWithDrafts.reduce((map, job) => map.set(jobLabel(job), (map.get(jobLabel(job)) || 0) + 1), new Map())];
   const needle = searchTerm.trim().toLocaleLowerCase('el-GR');
-  const visibleJobs = dayJobs
+  const visibleJobs = dayJobsWithDrafts
     .filter((job) => dayFilter === 'all' || jobLabel(job) === dayFilter)
     .filter((job) => {
       if (!needle) return true;
@@ -545,10 +637,10 @@ function App() {
     ? editingJobId
     : visibleJobs[0] ? jobKey(visibleJobs[0]) : '';
 
-  const dayMap = new Map((monthData?.days || []).map((day) => [day.date, day]));
+  const dayMap = new Map((liveMonthData?.days || []).map((day) => [day.date, day]));
   const cells = calendarCells(month);
   const weekRows = Array.from({ length: cells.length / 7 }, (_, index) => cells.slice(index * 7, index * 7 + 7));
-  const selectedDay = dayMap.get(selectedDate) || { jobCount: dayJobs.length, points: dayJobs.reduce((sum, job) => sum + job.points, 0) };
+  const selectedDay = dayMap.get(selectedDate) || { jobCount: dayJobsWithDrafts.length, points: dayJobsWithDrafts.reduce((sum, job) => sum + job.points, 0) };
 
   return (
     <main className="app-shell">
@@ -646,8 +738,8 @@ function App() {
                       {monthLocked ? 'Ξεκλείδωμα' : 'Έγκριση πληρωμής'}
                     </button>
                   )}
-                  <div className="month-points" aria-label={`${monthData?.totalPoints ?? 0} συνολικοί πόντοι`}>
-                    <strong>{monthData?.totalPoints ?? 0}</strong><span>pts</span>
+                  <div className="month-points" aria-label={`${liveMonthTotal} συνολικοί πόντοι`}>
+                    <strong>{liveMonthTotal}</strong><span>pts</span>
                   </div>
                 </div>
               </div>
@@ -718,8 +810,12 @@ function App() {
                   const key = jobKey(job);
                   const details = jobDetails[key];
                   const isActive = key === activeJobId;
+                  const originalJob = dayJobs.find((entry) => jobKey(entry) === key) || job;
                   const draft = drafts[key] || { categoryId: job.categoryId || '' };
-                  const isDirty = draft.categoryId !== (job.categoryId || '');
+                  const isDirty = Boolean(draft.categorySelected)
+                    || draft.categoryId !== (originalJob.categoryId || '')
+                    || (draft.pointsOverride !== undefined && draft.pointsOverride !== originalJob.pointsOverride);
+                  const pickerOpen = pickerJobId === key || (!draft.categoryId && !draft.pickerClosed);
                   return (
                     <article className="job-row" key={key}>
                       <div className="job-category-line">
@@ -738,7 +834,7 @@ function App() {
                               <>
                                 <div className="job-code-line">
                                   <span className="job-code">{details.serviceOrderId}</span>
-                                  <button type="button" className="copy-button" aria-label="Αντιγραφή κωδικού" onClick={() => void copyOrderCode(key, details.serviceOrderId)}>
+                                  <button type="button" className={`copy-button${copiedJobId === key ? ' is-copied' : ''}`} aria-label="Αντιγραφή κωδικού" onClick={() => void copyOrderCode(key, details.serviceOrderId)}>
                                     {copiedJobId === key ? <Check size={12} /> : <Copy size={12} />}
                                   </button>
                                 </div>
@@ -774,18 +870,59 @@ function App() {
                                     {pickerJobId === key ? 'Κλείσιμο' : 'Αλλαγή'}
                                   </button>
                                 )}
+                                {pickerOpen && !draft.categoryId && (
+                                  <button
+                                    type="button"
+                                    className="edit-points-link"
+                                    onClick={() => {
+                                      setPickerJobId('');
+                                      setDrafts((current) => ({ ...current, [key]: { ...draft, pickerClosed: true } }));
+                                    }}
+                                  >
+                                    Κλείσιμο
+                                  </button>
+                                )}
+                                {!pickerOpen && !draft.categoryId && (
+                                  <button
+                                    type="button"
+                                    className="edit-points-link"
+                                    onClick={() => {
+                                      setPickerJobId(key);
+                                      setDrafts((current) => ({ ...current, [key]: { ...draft, pickerClosed: false } }));
+                                    }}
+                                  >
+                                    Αλλαγή
+                                  </button>
+                                )}
                               </div>
-                              {(!draft.categoryId || pickerJobId === key) && (
+                              {pickerOpen && (
                                 <CategoryPicker
                                   value={draft.categoryId}
-                                  current={job.categoryId}
+                                  current={originalJob.categoryId}
+                                  pointsValue={job.points}
                                   onChange={(categoryId) => {
-                                    setDrafts((current) => ({ ...current, [key]: { ...draft, categoryId } }));
-                                    setPickerJobId('');
+                                    const selectedCategory = categories.find((category) => category.id === categoryId);
+                                    setDrafts((current) => ({
+                                      ...current,
+                                      [key]: {
+                                        ...draft,
+                                        categoryId,
+                                        pointsOverride: selectedCategory?.id === 'cabling_repair' ? selectedCategory.points : null,
+                                        categorySelected: true,
+                                        pickerClosed: false,
+                                      },
+                                    }));
+                                    setPickerJobId(key);
+                                  }}
+                                  onPointsChange={(pointsOverride) => {
+                                    setDrafts((current) => ({
+                                      ...current,
+                                      [key]: { ...draft, pointsOverride, categorySelected: true, pickerClosed: false },
+                                    }));
                                   }}
                                 />
                               )}
-                            <button className="save-correction" type="button" disabled={!isDirty || savingJobId === key} onClick={() => void saveCorrection(job)}>
+                            <button className={`save-correction${isDirty ? ' needs-save' : ''}`} type="button" disabled={!isDirty || savingJobId === key} onClick={() => void saveCorrection(job)}>
                               {savingJobId === key ? <RefreshCw size={15} className="spin" /> : <Save size={15} />}
                               <span>Αποθήκευση</span>
                             </button>
@@ -829,11 +966,11 @@ function App() {
                 <p className="eyebrow">ΑΝΑ ΚΑΤΗΓΟΡΙΑ</p>
                 <h2 id="summary-title">Μηνιαία σύνοψη</h2>
               </div>
-              <div className="summary-total"><strong>{monthData?.totalPoints ?? 0}</strong><span>pts</span></div>
+              <div className="summary-total"><strong>{liveMonthTotal}</strong><span>pts</span></div>
             </div>
-            {monthData?.categories?.length ? (
+            {liveMonthData?.categories?.length ? (
               <div className="summary-list">
-                {monthData.categories.map((entry) => (
+                {[...liveMonthData.categories].sort((a, b) => b.jobCount - a.jobCount || b.points - a.points).map((entry) => (
                   <div className={`summary-row${entry.mapped ? '' : ' is-pending'}`} key={entry.categoryId || 'unmapped'}>
                     <span className="category-marker" />
                     <span className="summary-category">{categoryLabel(entry.categoryId, entry.categoryName)}</span>
