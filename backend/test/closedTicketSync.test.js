@@ -88,6 +88,32 @@ test('syncs only new completed orders and skips duplicates before detail request
   }
 });
 
+test('reports the underlying workorder request error in progress and summary', async () => {
+  const repository = createClosedTicketRepository(':memory:');
+  const progress = [];
+
+  try {
+    const summary = await syncClosedTickets({
+      client: {
+        dailyWorkorders: async () => { throw new Error('socket hang up'); },
+      },
+      repository,
+      fromDate: parseDateRangeValue('14.10.2026'),
+      toDate: parseDateRangeValue('14.10.2026'),
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      wait: async () => {},
+      onProgress: (message) => progress.push(message),
+    });
+
+    assert.equal(summary.failed, 1);
+    assert.equal(summary.failures[0].message, 'socket hang up');
+    assert.ok(progress.some((message) => message.includes('failed to fetch workorders: socket hang up')));
+  } finally {
+    repository.close();
+  }
+});
+
 test('a repeated sync run skips existing orders without fetching details or updating rows', async () => {
   const repository = createClosedTicketRepository(':memory:');
   const order = createOrder('1');
@@ -160,6 +186,42 @@ test('refresh mode updates existing completed orders without inserting duplicate
     assert.equal(repository.count(), 1);
     assert.equal(updated.work_order_sla_date, '2026-10-14T06:00:00.000Z');
     assert.equal(updated.work_order_sla_outcome, 'late');
+  } finally {
+    repository.close();
+  }
+});
+
+test('refresh mode restores the assigned team from workorders when order details team is empty', async () => {
+  const repository = createClosedTicketRepository(':memory:');
+  let order = { ...createOrder('missing-team'), teamName: null };
+  let details = createDetails('missing-team');
+  const client = {
+    dailyWorkorders: async () => [order],
+    orderDetails: async () => details,
+    fetchWorkOrderSlaDetailsWithSession: async () => ({ workOrderSlaDate: '10/14/2026 12:00:00' }),
+    fetchLatestCommentWithSession: async () => null,
+  };
+  const options = {
+    client,
+    repository,
+    fromDate: parseDateRangeValue('14.10.2026'),
+    toDate: parseDateRangeValue('14.10.2026'),
+    minDelayMs: 0,
+    maxDelayMs: 0,
+    wait: async () => {},
+    now: () => new Date('2026-10-14T12:00:00.000Z'),
+  };
+
+  try {
+    assert.equal((await syncClosedTickets(options)).inserted, 1);
+    assert.equal(repository.getByOrderId('missing-team').team_name, null);
+
+    order = { ...order, teamName: 'Assigned Crew' };
+    details = { ...details, orderData: { ...details.orderData, teamName: '' } };
+    const summary = await syncClosedTickets({ ...options, refreshExisting: true });
+
+    assert.equal(summary.refreshed, 1);
+    assert.equal(repository.getByOrderId('missing-team').team_name, 'Assigned Crew');
   } finally {
     repository.close();
   }

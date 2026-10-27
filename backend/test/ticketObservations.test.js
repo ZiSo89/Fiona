@@ -43,6 +43,54 @@ test('reports a first call made after the call deadline as late', () => {
   }
 });
 
+test('records CALL LATER timestamp and call deadline changes without duplicating unchanged polls', () => {
+  const repository = createTicketObservationRepository(':memory:');
+  const callLater = (statusTime, callDue, noOfCalls = 1) => ({
+    ...ticket('CALL LATER', statusTime, callDue),
+    timeline: {
+      statusTime,
+      callLaterTime: '2026-10-14T08:30:00.000Z',
+      lastInteractionTime: '2026-10-14T08:30:00.000Z',
+    },
+    communication: { noOfCalls },
+  });
+
+  try {
+    repository.record([callLater('2026-10-14T08:30:00.000Z', '2026-10-14T12:00:00.000Z')]);
+    repository.record([callLater('2026-10-14T08:30:00.000Z', '2026-10-14T12:00:00.000Z')]);
+    repository.record([callLater('2026-10-14T08:30:00.000Z', '2026-10-14T16:00:00.000Z', 2)]);
+    repository.record([callLater('2026-10-14T12:30:00.000Z', '2026-10-14T16:00:00.000Z', 2)]);
+    repository.record(
+      [callLater('2026-10-14T16:30:00.000Z', '2026-10-14T20:00:00.000Z', 3)],
+      new Date(Date.parse(repository.callLaterMonitoringExpiresAt()) + 1),
+    );
+
+    assert.deepEqual(repository.callLaterHistory('100').map(({ statusTime, callDueAt, noOfCalls }) => ({
+      statusTime,
+      callDueAt,
+      noOfCalls,
+    })), [
+      {
+        statusTime: '2026-10-14T08:30:00.000Z',
+        callDueAt: '2026-10-14T12:00:00.000Z',
+        noOfCalls: 1,
+      },
+      {
+        statusTime: '2026-10-14T08:30:00.000Z',
+        callDueAt: '2026-10-14T16:00:00.000Z',
+        noOfCalls: 2,
+      },
+      {
+        statusTime: '2026-10-14T12:30:00.000Z',
+        callDueAt: '2026-10-14T16:00:00.000Z',
+        noOfCalls: 2,
+      },
+    ]);
+  } finally {
+    repository.close();
+  }
+});
+
 test('keeps observations for matching order IDs isolated by store', () => {
   const repository = createTicketObservationRepository(':memory:', null);
   try {

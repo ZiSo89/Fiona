@@ -60,6 +60,7 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
       source_category_id TEXT,
       category_id TEXT,
       points_override INTEGER,
+      points_override_manual INTEGER NOT NULL DEFAULT 0,
       scoring_version INTEGER NOT NULL DEFAULT 0,
       imported_at TEXT NOT NULL,
       corrected_at TEXT,
@@ -101,6 +102,9 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
   if (!jobColumns.has('scoring_version')) {
     database.exec('ALTER TABLE project_tracker_jobs ADD COLUMN scoring_version INTEGER NOT NULL DEFAULT 0');
   }
+  if (!jobColumns.has('points_override_manual')) {
+    database.exec('ALTER TABLE project_tracker_jobs ADD COLUMN points_override_manual INTEGER NOT NULL DEFAULT 0');
+  }
 
   const insertJob = database.prepare(`
     INSERT OR IGNORE INTO project_tracker_jobs (
@@ -129,7 +133,7 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
   `);
   const updateJob = database.prepare(`
     UPDATE project_tracker_jobs
-    SET category_id = ?, points_override = ?, corrected_at = ?, scoring_version = ?
+    SET category_id = ?, points_override = ?, points_override_manual = ?, corrected_at = ?, scoring_version = ?
     WHERE store_id = ? AND order_id = ?
   `);
   const updateJobScoring = database.prepare(`
@@ -181,12 +185,17 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
     const pointsOverride = correction.pointsOverride === undefined
       ? (previous.category_id === correction.categoryId ? previous.points_override : null)
       : correction.pointsOverride;
+    const pointsOverrideManual = correction.pointsOverride === undefined
+      ? (previous.category_id === correction.categoryId ? previous.points_override_manual : 0)
+      : Number(correction.pointsOverride !== null);
     if (previous.category_id === correction.categoryId
-      && previous.points_override === pointsOverride) return projectTrackerJobFromRow(previous);
+      && previous.points_override === pointsOverride
+      && previous.points_override_manual === pointsOverrideManual) return projectTrackerJobFromRow(previous);
 
     updateJob.run(
       correction.categoryId,
       pointsOverride,
+      pointsOverrideManual,
       correction.changedAt,
       previous.category_id === correction.categoryId ? previous.scoring_version : 0,
       correction.storeId,
@@ -208,13 +217,13 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
     const previous = jobById.get(storeId, orderId);
     if (!previous) return false;
 
-    const pointsChanged = previous.points_override !== pointsOverride;
+    const pointsChanged = !previous.points_override_manual && previous.points_override !== pointsOverride;
     const sourceCategoryChanged = sourceCategoryId && previous.source_category_id !== sourceCategoryId;
     const versionChanged = previous.scoring_version !== scoringVersion;
     if (!pointsChanged && !sourceCategoryChanged && !versionChanged) return false;
 
     updateJobScoring.run(
-      pointsOverride,
+      previous.points_override_manual ? previous.points_override : pointsOverride,
       sourceCategoryId,
       scoringVersion,
       storeId,
@@ -240,7 +249,7 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
       const categoryTokens = String(row.source_category_id ?? '').split('|').map((token) => token.trim()).filter(Boolean);
       const category = mapProjectTrackerCategory(categoryMap, row.source_label, ...categoryTokens);
       if (!category) continue;
-      updateJob.run(category.id, row.points_override, changedAt, 0, row.store_id, row.order_id);
+      updateJob.run(category.id, row.points_override, 0, changedAt, 0, row.store_id, row.order_id);
       insertAudit.run(
         row.store_id,
         row.order_id,
@@ -265,7 +274,7 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
       );
       if (!category || category.id === row.category_id) continue;
       if (monthLockById.get(row.store_id, row.team_name, athensMonthOf(row.closed_at))?.locked) continue;
-      updateJob.run(category.id, null, null, 0, row.store_id, row.order_id);
+      updateJob.run(category.id, null, 0, null, 0, row.store_id, row.order_id);
       insertAudit.run(
         row.store_id,
         row.order_id,
@@ -295,7 +304,7 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
         const previous = jobById.get(storeId, orderId);
         if (!previous || !getProjectTrackerCategory(categoryId)) return false;
         if (monthLockById.get(storeId, previous.team_name, athensMonthOf(previous.closed_at))?.locked) return false;
-        updateJob.run(categoryId, null, null, 0, storeId, orderId);
+        updateJob.run(categoryId, null, 0, null, 0, storeId, orderId);
         if (sourceCategoryId) updateJobScoring.run(null, sourceCategoryId, 0, storeId, orderId);
         insertAudit.run(storeId, orderId, 'SYSTEM:CATEGORY_MIGRATION', previous.category_id, categoryId, previous.points_override, null, changedAt);
         return true;
@@ -331,7 +340,8 @@ export function createProjectTrackerRepository(dbPath = config.closedTicketsDbPa
     getJobsNeedingScoring(scoringVersion) {
       return database.prepare(`
         SELECT * FROM project_tracker_jobs
-        WHERE category_id = 'ftth_installation' AND scoring_version < ?
+        WHERE category_id IN ('ftth_installation', 'cabling_repair')
+          AND scoring_version < ? AND points_override_manual = 0
         ORDER BY closed_at, order_id
       `).all(scoringVersion).map((row) => ({
         ...projectTrackerJobFromRow(row),

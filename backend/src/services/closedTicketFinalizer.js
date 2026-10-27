@@ -1,4 +1,6 @@
+import { config } from '../config.js';
 import { buildClosedTicketRecord, findOrderField } from './closedTicketSla.js';
+import { cleanTeamName } from './orderNormalizer.js';
 
 const MAX_ATTEMPTS = 6;
 const MAX_PER_RUN = 15;
@@ -8,6 +10,37 @@ const MAX_RETRY_DELAY_MS = 24 * 60 * 60 * 1000;
 
 function retryDelay(attempts) {
   return Math.min(BASE_RETRY_DELAY_MS * (2 ** Math.min(attempts, 10)), MAX_RETRY_DELAY_MS);
+}
+
+const athensDayFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Athens',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+});
+
+// Order details do not include the crew; the daily workorders list does.
+async function findDailyTeamName(client, orderId, dates) {
+  if (typeof client.dailyWorkorders !== 'function') return null;
+  const groups = client.config?.closedServiceGroups?.length
+    ? client.config.closedServiceGroups
+    : config.closedTicketServiceGroups;
+  // The order is listed under its scheduled day, which can differ from the completion day.
+  const workDates = [...new Set(dates.filter(Boolean).map((value) => {
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : athensDayFormatter.format(parsed).replaceAll('/', '.');
+  }).filter(Boolean))];
+  for (const workDate of workDates) {
+    try {
+      const workorders = await client.dailyWorkorders(workDate, groups);
+      const match = workorders.find((workorder) => String(workorder?.orderId ?? workorder?.id) === String(orderId));
+      const teamName = cleanTeamName(match?.teamName);
+      if (teamName) return teamName;
+    } catch {
+      // Try the next candidate day.
+    }
+  }
+  return null;
 }
 
 // Open tickets are remembered; once one leaves the open list it is looked up and stored if COMPLETED.
@@ -35,12 +68,15 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
         const order = {
           orderId: row.order_id,
           serviceOrderId: row.service_order_id,
-          teamName: findOrderField(details, 'teamName') ?? row.team_name,
+          teamName: cleanTeamName(findOrderField(details, 'teamName')) ?? cleanTeamName(row.team_name),
         };
         const preliminaryRecord = buildClosedTicketRecord(order, details, {}, null, now());
         if (!preliminaryRecord) {
           giveUp();
           continue;
+        }
+        if (!preliminaryRecord.team_name) {
+          order.teamName = await findDailyTeamName(client, row.order_id, [preliminaryRecord.scheduled_at, preliminaryRecord.closed_at]);
         }
         const serviceOrderId = preliminaryRecord.service_order_id || row.service_order_id || '';
         const workOrderData = await client.fetchWorkOrderSlaDetailsWithSession(serviceOrderId);
@@ -51,6 +87,12 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
           continue;
         }
 
+        // The crew can appear in Fiona's daily list later; wait instead of storing a ticket without one.
+        if (!record.team_name && row.attempts + 1 < MAX_ATTEMPTS) {
+          repository.schedulePendingRetry(row.order_id, new Date(now().getTime() + retryDelay(row.attempts)));
+          summary.retry += 1;
+          continue;
+        }
         const alreadyStored = repository.hasOrder(row.order_id);
         const saved = alreadyStored
           ? repository.updateExisting(record)
@@ -84,7 +126,7 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
           store_id: ticket?.storeId || undefined,
           order_id: orderId,
           service_order_id: ticket?.serviceOrderId ? String(ticket.serviceOrderId) : null,
-          team_name: ticket?.dispatch?.assignedTeam || null,
+          team_name: ticket?.dispatch?.crewName || null,
         });
       }
       if (running) return null;

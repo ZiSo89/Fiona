@@ -238,10 +238,10 @@ test('dailyWorkorders keeps the assigned team separate from its group name', asy
       return {
         data: {
           UserTeams: [{
-            teamName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS',
+            teamName: 'Team Alpha',
             TeamWorkOrders: [
-              { orderId: '123', orderStatus: 'COMPLETED', teamName: 'Team Alpha' },
-              { orderId: '124', orderStatus: 'COMPLETED' },
+              { orderId: '123', orderStatus: 'COMPLETED', teamName: 'null', serviceGroupName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS' },
+              { orderId: '124', orderStatus: 'COMPLETED', teamName: null, serviceGroupName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS' },
             ],
           }],
         },
@@ -256,12 +256,14 @@ test('dailyWorkorders keeps the assigned team separate from its group name', asy
       orderId: '123',
       orderStatus: 'COMPLETED',
       teamName: 'Team Alpha',
+      serviceGroupName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS',
       teamGroupName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS',
     },
     {
       orderId: '124',
       orderStatus: 'COMPLETED',
-      teamName: null,
+      teamName: 'Team Alpha',
+      serviceGroupName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS',
       teamGroupName: 'NEW TECHNOLOGIES LTD ALEXANDROUPOLIS',
     },
   ]);

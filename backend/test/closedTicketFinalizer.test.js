@@ -7,7 +7,7 @@ import { createClosedTicketRepository } from '../src/repositories/closedTicketRe
 import { createClosedTicketFinalizer } from '../src/services/closedTicketFinalizer.js';
 import { buildClosedTicketRecord } from '../src/services/closedTicketSla.js';
 
-const openTicket = { id: '77', serviceOrderId: 'PS1-1', dispatch: { assignedTeam: 'Team A' } };
+const openTicket = { id: '77', serviceOrderId: 'PS1-1', dispatch: { crewName: 'Team A', assignedTeam: 'Team A' } };
 const otherTicket = { id: '78', serviceOrderId: 'PS2-1', dispatch: {} };
 
 function fakeClient(details) {
@@ -37,6 +37,7 @@ test('a ticket that leaves the open list is stored as closed', async () => {
   assert.equal(summary.inserted, 1);
   assert.equal(repository.hasOrder('77'), true);
   assert.equal(repository.getByOrderId('77').customer_name, 'A B');
+  assert.equal(repository.getByOrderId('77').team_name, 'Team A');
   assert.deepEqual(repository.listPending().map((row) => row.order_id), ['78']);
 });
 
@@ -67,6 +68,45 @@ test('a ticket that closes while the server is stopped is finalized after restar
   } finally {
     fs.rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test('a completed ticket without a crew waits for the daily list instead of being stored', async () => {
+  const repository = createClosedTicketRepository(':memory:');
+  let crew = null;
+  let now = new Date('2026-10-12T12:00:00.000Z');
+  const client = {
+    ...fakeClient(completed),
+    dailyWorkorders: async () => [{ orderId: '77', teamName: crew }],
+  };
+  const finalizer = createClosedTicketFinalizer({ client, repository, now: () => now });
+  const noCrewTicket = { id: '77', serviceOrderId: 'PS1-1', dispatch: { assignedTeam: 'NEW TECHNOLOGIES LTD' } };
+
+  await finalizer.process([noCrewTicket]);
+  const first = await finalizer.process([otherTicket]);
+  assert.equal(first.inserted, 0);
+  assert.equal(first.retry >= 1, true);
+  assert.equal(repository.hasOrder('77'), false);
+
+  crew = 'Team Z';
+  now = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const second = await finalizer.process([otherTicket]);
+  assert.equal(second.inserted, 1);
+  assert.equal(repository.getByOrderId('77').team_name, 'Team Z');
+});
+
+test('a ticket whose crew never appears is stored without one on the last attempt', async () => {
+  const repository = createClosedTicketRepository(':memory:');
+  let now = new Date('2026-10-12T12:00:00.000Z');
+  const finalizer = createClosedTicketFinalizer({ client: fakeClient(completed), repository, now: () => now });
+  const noCrewTicket = { id: '77', serviceOrderId: 'PS1-1', dispatch: {} };
+
+  await finalizer.process([noCrewTicket]);
+  for (let attempt = 0; attempt < 8 && !repository.hasOrder('77'); attempt += 1) {
+    await finalizer.process([otherTicket]);
+    now = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+  }
+  assert.equal(repository.hasOrder('77'), true);
+  assert.equal(repository.getByOrderId('77').team_name, null);
 });
 
 test('a completed ticket without an SLA date is re-enriched automatically', async () => {

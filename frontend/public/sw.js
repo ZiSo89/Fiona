@@ -1,5 +1,5 @@
 const APP_BASE = '/app';
-const CACHE_NAME = 'fiona-dispatch-v15';
+const CACHE_NAME = 'fiona-dispatch-v16';
 const APP_SHELL = [
   `${APP_BASE}/`,
   `${APP_BASE}/index.html`,

@@ -45,6 +45,13 @@ function toIsoDate(value) {
   return parseFionaDate(value)?.toISOString() || null;
 }
 
+// Fiona sends the literal string "null" for unassigned teams.
+export function cleanTeamName(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const text = String(value).trim();
+  return !text || /^(?:null|undefined|none)$/i.test(text) ? null : text;
+}
+
 export function parseFionaDate(value) {
   if (!value) return null;
 
@@ -354,7 +361,8 @@ function normalizeTicket(order) {
     dispatch: {
       teamId: order?.teamId || null,
       orderOwner: order?.orderOwner || order?.OrderOwner?.username || null,
-      assignedTeam: order?.serviceGroup || order?.teamName || null,
+      crewName: cleanTeamName(order?.teamName),
+      assignedTeam: cleanTeamName(order?.teamName) || order?.serviceGroup || null,
       routeTarget: 'Google Maps',
     },
     meta: {
