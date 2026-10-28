@@ -58,6 +58,7 @@ test('theme toggle applies and remembers the charcoal dark theme', async ({ page
 
 test('calendar cells share one color that contrasts with the page background', async ({ page }) => {
   await page.goto('/tracker/');
+  await expect(page.locator('.calendar-weeks .calendar-day').first()).toBeVisible();
 
   const colors = await page.locator('.calendar-weeks .calendar-day, .calendar-weeks .calendar-empty').evaluateAll((cells) => (
     cells.map((cell) => getComputedStyle(cell).backgroundColor)

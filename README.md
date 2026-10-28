@@ -163,7 +163,7 @@ npm --prefix project-tracker run lint
 Η διαδρομή αυτή προορίζεται για Linux Plesk με Node.js 22 και MariaDB 10.11. Η βάση παραμένει στο hosting, όχι στο PC. Τα ίδια queries υποστηρίζουν MySQL 8, αλλά ο έλεγχος integration γίνεται με MariaDB 10.11.
 
 1. Στο **Databases → Add Database** δημιούργησε άδεια βάση για το subdomain και ξεχωριστό χρήστη με πρόσβαση μόνο σε αυτήν, από τον τοπικό server. Κράτησε τα τελικά ονόματα βάσης/χρήστη που δίνει το Plesk, μαζί με τυχόν prefix. Μην ενεργοποιήσεις δημόσια πρόσβαση στη βάση.
-2. Ανέβασε το repository με **Git → Deploy** σε ιδιωτικό application directory, π.χ. `fiona`. Μην ανεβάσεις `node_modules` από Windows.
+2. Ανέβασε το repository με **Git → Deploy** σε ιδιωτικό application directory, π.χ. `fiona`, από το branch **`deploy`**. Το branch αυτό το φτιάχνει αυτόματα το workflow `Build Plesk deploy branch` σε κάθε push στο `main` και περιέχει ήδη το `backend/node_modules` (Linux) και τα χτισμένα `frontend/dist` και `project-tracker/dist`. Έτσι ο server δεν τρέχει ποτέ `npm`, κάτι που σε shared hosting αποτυγχάνει με `fork: Resource temporarily unavailable` ή `Aborted (core dumped)`. Στο **Git → Repository settings → Deploy actions** βάλε `mkdir -p tmp && touch tmp/restart.txt` ώστε το Passenger να επανεκκινεί μόνο του μετά από κάθε pull. Μην ανεβάσεις `node_modules` από Windows.
 3. Στο **Node.js** όρισε:
    - **Application Root:** ο φάκελος `fiona` με το κεντρικό `package.json`.
    - **Document Root:** κενός υποφάκελος `fiona/public`, τον οποίο δημιουργείς από File Manager. Όχι ο φάκελος του backend ή η ρίζα του repository.
@@ -181,7 +181,7 @@ npm --prefix project-tracker run lint
    ```
 
    Χρησιμοποίησε το host που επιβεβαιώνει ο πάροχος αν διαφέρει. Το `CLOSED_TICKETS_DB_PATH` αγνοείται στη MySQL λειτουργία. Μην ορίσεις χειροκίνητα `PORT` στο Plesk. Για εξωτερικό database server, το `DB_SSL_CA` δείχνει σε ιδιωτικό αρχείο CA ώστε να γίνεται επαλήθευση TLS· μην απενεργοποιείς την επαλήθευση πιστοποιητικού.
-5. Στο **Run script** εκτέλεσε `build:plesk`. Το script εγκαθιστά το backend με `--omit=optional`, χωρίς καν να επιχειρεί εγκατάσταση `better-sqlite3`, και χτίζει τα δύο frontends με τα devDependencies τους. Μην χρησιμοποιήσεις `build:render` σε server που δεν μπορεί να εγκαταστήσει native SQLite modules.
+5. Με το branch `deploy` δεν χρειάζεται **Run script**. Μόνο αν ο server σου έχει αρκετούς πόρους και τραβάς το `main`, εκτέλεσε `build:plesk`. Το script εγκαθιστά το backend με `--omit=optional`, χωρίς καν να επιχειρεί εγκατάσταση `better-sqlite3`, και χτίζει τα δύο frontends με τα devDependencies τους. Μην χρησιμοποιήσεις `build:render` σε server που δεν μπορεί να εγκαταστήσει native SQLite modules.
 6. **Αν μεταφέρεις παλιά δεδομένα, μην εκκινήσεις την εφαρμογή ακόμη:** ολοκλήρωσε πρώτα την επόμενη ενότητα. Ακόμη και η πρώτη εκκίνηση γράφει ρυθμίσεις/cutover και η εισαγωγή απαιτεί άδειους πίνακες.
 7. Ενεργοποίησε HTTPS/Let's Encrypt για το subdomain και μετά **Enable Node.js / Restart App**. Έλεγξε `/app/`, `/tracker/` και `/api/health`. Οι πίνακες δημιουργούνται αυτόματα με InnoDB, `utf8mb4_bin` και schema version 1. Ο χρήστης βάσης χρειάζεται DDL δικαιώματα μέσα στη συγκεκριμένη βάση για την αρχική εγκατάσταση και μελλοντικές migrations.
 
