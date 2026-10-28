@@ -5,11 +5,11 @@ import { mapProjectTrackerCategory } from '../src/services/projectTrackerCatalog
 import { syncProjectTracker } from '../src/services/projectTrackerSync.js';
 
 async function withRepository(run) {
-  const repository = createProjectTrackerRepository(':memory:');
+  const repository = await createProjectTrackerRepository(':memory:');
   try {
     return await run(repository);
   } finally {
-    repository.close();
+    await repository.close();
   }
 }
 
@@ -21,7 +21,7 @@ const store = {
 
 test('imports only Fiona-completed jobs after cutover and deduplicates repeat syncs', async () => {
   await withRepository(async (repository) => {
-    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    await repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
     const calls = [];
     const client = {
       async dailyWorkorders(date, groups) {
@@ -61,8 +61,8 @@ test('imports only Fiona-completed jobs after cutover and deduplicates repeat sy
     const second = await syncProjectTracker(options);
     assert.equal(first.inserted, 1);
     assert.equal(second.alreadyPresent, 1);
-    assert.equal(repository.getMonthJobs('2026-10')[0].teamName, 'Install Team');
-    assert.equal(repository.getMonthJobs('2026-10')[0].points, 50);
+    assert.equal((await repository.getMonthJobs('2026-10'))[0].teamName, 'Install Team');
+    assert.equal((await repository.getMonthJobs('2026-10'))[0].points, 50);
     assert.deepEqual(calls[0], ['daily', '18.10.2026', ['395']]);
     assert.equal(calls.filter(([kind]) => kind === 'details').length, 1);
   });
@@ -70,8 +70,8 @@ test('imports only Fiona-completed jobs after cutover and deduplicates repeat sy
 
 test('corrects a previously imported group name to the assigned team name', async () => {
   await withRepository(async (repository) => {
-    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
-    repository.insertJob({
+    await repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    await repository.insertJob({
       storeId: 'alexandroupoli',
       orderId: 'fiona-grouped',
       teamName: 'NEW TECHNOLOGIES LTD KOMOTINI',
@@ -113,13 +113,13 @@ test('corrects a previously imported group name to the assigned team name', asyn
     });
 
     assert.equal(summary.teamUpdated, 1);
-    assert.equal(repository.getJob('alexandroupoli', 'fiona-grouped').teamName, 'Kostas Tektonidis');
+    assert.equal((await repository.getJob('alexandroupoli', 'fiona-grouped')).teamName, 'Kostas Tektonidis');
   });
 });
 
 test('does not import pre-cutover, incomplete, unassigned, or other-store work', async () => {
   await withRepository(async (repository) => {
-    repository.ensureCutoverAt(new Date('2026-10-18T12:00:00.000Z'));
+    await repository.ensureCutoverAt(new Date('2026-10-18T12:00:00.000Z'));
     const orders = [
       { orderId: 'old', teamName: 'Team One' },
       { orderId: 'open', teamName: 'Team One' },
@@ -150,13 +150,13 @@ test('does not import pre-cutover, incomplete, unassigned, or other-store work',
     assert.equal(summary.notCompleted, 1);
     assert.equal(summary.missingTeam, 1);
     assert.equal(summary.otherStore, 1);
-    assert.equal(repository.getMonthJobs('2026-10').length, 0);
+    assert.equal((await repository.getMonthJobs('2026-10')).length, 0);
   });
 });
 
 test('maps verified Fiona category values exactly and leaves unknown values unmapped', async () => {
   await withRepository(async (repository) => {
-    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    await repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
     const client = {
       async dailyWorkorders() {
         return [
@@ -185,8 +185,8 @@ test('maps verified Fiona category values exactly and leaves unknown values unma
       now: () => new Date('2026-10-18T12:00:00.000Z'),
     });
 
-    assert.equal(repository.getJob('alexandroupoli', 'mapped').categoryId, 'ftth_installation');
-    assert.equal(repository.getJob('alexandroupoli', 'unmapped').mapped, false);
+    assert.equal((await repository.getJob('alexandroupoli', 'mapped')).categoryId, 'ftth_installation');
+    assert.equal((await repository.getJob('alexandroupoli', 'unmapped')).mapped, false);
   });
 });
 
@@ -201,7 +201,7 @@ test('maps copper and combined work separately and keeps double-team manual-only
 
 test('scores cabling at 50 only when the latest comment confirms installation or routing', async () => {
   await withRepository(async (repository) => {
-    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    await repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
     const comments = {
       installed: 'Έγινε εγκατάσταση.',
       routed: 'Έγινε όδευση.',
@@ -244,21 +244,21 @@ test('scores cabling at 50 only when the latest comment confirms installation or
       now: () => new Date('2026-10-18T12:00:00.000Z'),
     });
 
-    assert.equal(repository.getJob('alexandroupoli', 'installed').points, 50);
-    assert.equal(repository.getJob('alexandroupoli', 'routed').points, 50);
-    assert.equal(repository.getJob('alexandroupoli', 'incomplete').points, 15);
-    assert.equal(repository.getJob('alexandroupoli', 'routing-only').points, 50);
-    assert.equal(repository.getJob('alexandroupoli', 'standalone-routing').points, 15);
-    assert.equal(repository.getJob('alexandroupoli', 'reverse-order').points, 50);
-    assert.equal(repository.getJob('alexandroupoli', 'reverse-installation').points, 50);
-    assert.equal(repository.getJob('alexandroupoli', 'standalone-installation').points, 15);
+    assert.equal((await repository.getJob('alexandroupoli', 'installed')).points, 50);
+    assert.equal((await repository.getJob('alexandroupoli', 'routed')).points, 50);
+    assert.equal((await repository.getJob('alexandroupoli', 'incomplete')).points, 15);
+    assert.equal((await repository.getJob('alexandroupoli', 'routing-only')).points, 50);
+    assert.equal((await repository.getJob('alexandroupoli', 'standalone-routing')).points, 15);
+    assert.equal((await repository.getJob('alexandroupoli', 'reverse-order')).points, 50);
+    assert.equal((await repository.getJob('alexandroupoli', 'reverse-installation')).points, 50);
+    assert.equal((await repository.getJob('alexandroupoli', 'standalone-installation')).points, 15);
   });
 });
 
 test('sync applies new exact mappings to existing pending rows before polling', async () => {
   await withRepository(async (repository) => {
-    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
-    repository.insertJob({
+    await repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    await repository.insertJob({
       storeId: 'alexandroupoli',
       orderId: 'existing-nga',
       teamName: 'Team One',
@@ -277,14 +277,14 @@ test('sync applies new exact mappings to existing pending rows before polling', 
       now: () => new Date('2026-10-19T12:00:00.000Z'),
     });
     assert.equal(summary.remappedExisting, 1);
-    assert.equal(repository.getJob('alexandroupoli', 'existing-nga').points, 50);
+    assert.equal((await repository.getJob('alexandroupoli', 'existing-nga')).points, 50);
   });
 });
 
 test('applies the 5.8.5 score rule to existing jobs while preserving manual category corrections', async () => {
   await withRepository(async (repository) => {
-    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
-    repository.insertJob({
+    await repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    await repository.insertJob({
       storeId: 'alexandroupoli',
       orderId: 'existing-corrected',
       teamName: 'Team One',
@@ -295,7 +295,7 @@ test('applies the 5.8.5 score rule to existing jobs while preserving manual cate
       sourceCategoryId: 'PaSPort|INSTALLATION|NGA Activation|5.8.5',
       importedAt: '2026-10-18T11:00:00.000Z',
     });
-    repository.correctJob({
+    await repository.correctJob({
       storeId: 'alexandroupoli',
       orderId: 'existing-corrected',
       teamName: 'Team One',
@@ -323,15 +323,15 @@ test('applies the 5.8.5 score rule to existing jobs while preserving manual cate
     });
 
     assert.equal(summary.updatedExisting, 1);
-    assert.equal(repository.getJob('alexandroupoli', 'existing-corrected').points, 50);
-    assert.equal(repository.getJob('alexandroupoli', 'existing-corrected').categoryId, 'ftth_installation');
+    assert.equal((await repository.getJob('alexandroupoli', 'existing-corrected')).points, 50);
+    assert.equal((await repository.getJob('alexandroupoli', 'existing-corrected')).categoryId, 'ftth_installation');
   });
 });
 
 test('5.8.5 scores 15 without either routing phrase; 5.10 stays at 50', async () => {
   await withRepository(async (repository) => {
-    repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
-    repository.insertJob({
+    await repository.ensureCutoverAt(new Date('2026-10-18T09:00:00.000Z'));
+    await repository.insertJob({
       storeId: 'alexandroupoli',
       orderId: 'existing-visit-ok',
       teamName: 'Team One',
@@ -386,11 +386,11 @@ test('5.8.5 scores 15 without either routing phrase; 5.10 stays at 50', async ()
       now: () => new Date('2026-10-18T12:00:00.000Z'),
     });
 
-    assert.equal(repository.getJob('alexandroupoli', 'no-routing').points, 15);
-    assert.equal(repository.getJob('alexandroupoli', 'reverse-routing').points, 50);
-    assert.equal(repository.getJob('alexandroupoli', 'installation-only').points, 15);
-    assert.equal(repository.getJob('alexandroupoli', 'visit-ok').points, 50);
-    assert.equal(repository.getJob('alexandroupoli', 'existing-visit-ok').points, 50);
+    assert.equal((await repository.getJob('alexandroupoli', 'no-routing')).points, 15);
+    assert.equal((await repository.getJob('alexandroupoli', 'reverse-routing')).points, 50);
+    assert.equal((await repository.getJob('alexandroupoli', 'installation-only')).points, 15);
+    assert.equal((await repository.getJob('alexandroupoli', 'visit-ok')).points, 50);
+    assert.equal((await repository.getJob('alexandroupoli', 'existing-visit-ok')).points, 50);
     assert.deepEqual(imported, ['no-routing', 'reverse-routing', 'installation-only']);
   });
 });

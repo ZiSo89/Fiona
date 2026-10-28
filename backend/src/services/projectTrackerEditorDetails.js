@@ -18,8 +18,8 @@ function addressFrom(stored, order) {
 
 export function createProjectTrackerEditorDetails({ getClient, getStoredDetails, getCachedDetails, saveCachedDetails }) {
   return async ({ storeId, orderId }) => {
-    const stored = getStoredDetails(storeId, orderId);
-    const cached = getCachedDetails?.(storeId, orderId) ?? null;
+    const stored = await getStoredDetails(storeId, orderId);
+    const cached = (await getCachedDetails?.(storeId, orderId)) ?? null;
     const client = cached ? null : getClient(storeId);
     let order = null;
     let latestComment = cached?.commentText ? { text: cached.commentText, insertTime: cached.commentAt } : null;
@@ -39,7 +39,7 @@ export function createProjectTrackerEditorDetails({ getClient, getStoredDetails,
         commentLoaded = false;
       }
       if (commentLoaded && saveCachedDetails) {
-        saveCachedDetails(storeId, orderId, {
+        await saveCachedDetails(storeId, orderId, {
           problemDescription: null,
           commentText: latestComment?.text ?? null,
           commentAt: latestComment?.insertTime ?? null,

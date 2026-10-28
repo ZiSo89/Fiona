@@ -45,7 +45,7 @@ export async function writeClosedTicketExport({ repository, fromDate, toDate, st
     toDate.getUTCMonth(),
     toDate.getUTCDate() + 1,
   )).toISOString();
-  const records = repository.exportClosedBetween(from, to);
+  const records = await repository.exportClosedBetween(from, to);
   const formatDate = (value) => [
     String(value.getUTCDate()).padStart(2, '0'),
     String(value.getUTCMonth() + 1).padStart(2, '0'),
@@ -78,9 +78,9 @@ export async function run(args = process.argv.slice(2)) {
   console.log(`Range: ${formatDate(options.fromDate)} to ${formatDate(options.toDate)} (inclusive)`);
   console.log(`Service groups: ${options.serviceGroups.join(', ')}`);
   console.log(`Store: ${options.storeId}`);
-  console.log(`Database: ${config.closedTicketsDbPath}`);
+  console.log(`Database: ${config.dbClient === 'mysql' ? 'MySQL/MariaDB' : config.closedTicketsDbPath}`);
 
-  const repository = createClosedTicketRepository(config.closedTicketsDbPath, options.storeId);
+  const repository = await createClosedTicketRepository(config.closedTicketsDbPath, options.storeId);
   try {
     const summary = await syncClosedTickets({
       ...options,
@@ -105,7 +105,7 @@ export async function run(args = process.argv.slice(2)) {
     if (summary.failed > 0) process.exitCode = 1;
     return summary;
   } finally {
-    repository.close();
+    await repository.close();
   }
 }
 

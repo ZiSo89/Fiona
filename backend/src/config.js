@@ -60,6 +60,7 @@ export function buildFionaStores(environment = process.env) {
 }
 
 export const config = {
+  dbClient: process.env.DB_CLIENT || 'sqlite',
   port: Number(process.env.PORT || 4000),
   fionaAuthUrl: process.env.FIONA_AUTH_URL || 'https://fiona.nova.gr/gateway/FionaAuthAPI/1.0/fiona/GR/auth/login',
   fionaOrdersUrl: process.env.FIONA_ORDERS_URL || 'https://fiona.nova.gr/gateway/FionaWebAPI/1.0/fionaWeb/orders/filter',

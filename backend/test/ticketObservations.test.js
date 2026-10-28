@@ -12,39 +12,39 @@ const ticket = (status, statusTime, callDue = '2026-10-14T09:00:00.000Z') => ({
   communication: { noOfCalls: 1 },
 });
 
-test('records each status once and measures the first move to CALL LATER or APPOINTMENT', () => {
-  const repository = createTicketObservationRepository(':memory:');
+test('records each status once and measures the first move to CALL LATER or APPOINTMENT', async () => {
+  const repository = await createTicketObservationRepository(':memory:');
   try {
-    assert.equal(repository.record([ticket('OPEN', '2026-10-14T05:00:00.000Z')]), 1);
-    assert.equal(repository.record([ticket('OPEN', '2026-10-14T05:00:00.000Z')]), 0);
-    assert.equal(repository.firstCall('100').outcome, 'unknown');
+    assert.equal(await repository.record([ticket('OPEN', '2026-10-14T05:00:00.000Z')]), 1);
+    assert.equal(await repository.record([ticket('OPEN', '2026-10-14T05:00:00.000Z')]), 0);
+    assert.equal((await repository.firstCall('100')).outcome, 'unknown');
 
-    repository.record([ticket('CALL LATER', '2026-10-14T08:30:00.000Z')]);
-    repository.record([ticket('APPOINTMENT', '2026-10-14T11:00:00.000Z')]);
+    await repository.record([ticket('CALL LATER', '2026-10-14T08:30:00.000Z')]);
+    await repository.record([ticket('APPOINTMENT', '2026-10-14T11:00:00.000Z')]);
 
-    assert.deepEqual(repository.firstCall('100'), {
+    assert.deepEqual(await repository.firstCall('100'), {
       firstContactAt: '2026-10-14T08:30:00.000Z',
       firstContactStatus: 'CALL LATER',
       callDueAt: '2026-10-14T09:00:00.000Z',
       outcome: 'on_time',
     });
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
-test('reports a first call made after the call deadline as late', () => {
-  const repository = createTicketObservationRepository(':memory:');
+test('reports a first call made after the call deadline as late', async () => {
+  const repository = await createTicketObservationRepository(':memory:');
   try {
-    repository.record([ticket('APPOINTMENT', '2026-10-14T10:00:00.000Z')]);
-    assert.equal(repository.firstCall('100').outcome, 'late');
+    await repository.record([ticket('APPOINTMENT', '2026-10-14T10:00:00.000Z')]);
+    assert.equal((await repository.firstCall('100')).outcome, 'late');
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
-test('records CALL LATER timestamp and call deadline changes without duplicating unchanged polls', () => {
-  const repository = createTicketObservationRepository(':memory:');
+test('records CALL LATER timestamp and call deadline changes without duplicating unchanged polls', async () => {
+  const repository = await createTicketObservationRepository(':memory:');
   const callLater = (statusTime, callDue, noOfCalls = 1) => ({
     ...ticket('CALL LATER', statusTime, callDue),
     timeline: {
@@ -56,16 +56,16 @@ test('records CALL LATER timestamp and call deadline changes without duplicating
   });
 
   try {
-    repository.record([callLater('2026-10-14T08:30:00.000Z', '2026-10-14T12:00:00.000Z')]);
-    repository.record([callLater('2026-10-14T08:30:00.000Z', '2026-10-14T12:00:00.000Z')]);
-    repository.record([callLater('2026-10-14T08:30:00.000Z', '2026-10-14T16:00:00.000Z', 2)]);
-    repository.record([callLater('2026-10-14T12:30:00.000Z', '2026-10-14T16:00:00.000Z', 2)]);
-    repository.record(
+    await repository.record([callLater('2026-10-14T08:30:00.000Z', '2026-10-14T12:00:00.000Z')]);
+    await repository.record([callLater('2026-10-14T08:30:00.000Z', '2026-10-14T12:00:00.000Z')]);
+    await repository.record([callLater('2026-10-14T08:30:00.000Z', '2026-10-14T16:00:00.000Z', 2)]);
+    await repository.record([callLater('2026-10-14T12:30:00.000Z', '2026-10-14T16:00:00.000Z', 2)]);
+    await repository.record(
       [callLater('2026-10-14T16:30:00.000Z', '2026-10-14T20:00:00.000Z', 3)],
-      new Date(Date.parse(repository.callLaterMonitoringExpiresAt()) + 1),
+      new Date(Date.parse(await repository.callLaterMonitoringExpiresAt()) + 1),
     );
 
-    assert.deepEqual(repository.callLaterHistory('100').map(({ statusTime, callDueAt, noOfCalls }) => ({
+    assert.deepEqual((await repository.callLaterHistory('100')).map(({ statusTime, callDueAt, noOfCalls }) => ({
       statusTime,
       callDueAt,
       noOfCalls,
@@ -87,26 +87,26 @@ test('records CALL LATER timestamp and call deadline changes without duplicating
       },
     ]);
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
-test('keeps observations for matching order IDs isolated by store', () => {
-  const repository = createTicketObservationRepository(':memory:', null);
+test('keeps observations for matching order IDs isolated by store', async () => {
+  const repository = await createTicketObservationRepository(':memory:', null);
   try {
-    repository.record([{
+    await repository.record([{
       ...ticket('CALL LATER', '2026-10-14T10:00:00.000Z', '2026-10-14T09:00:00.000Z'),
       storeId: 'alexandroupoli',
     }]);
-    repository.record([{
+    await repository.record([{
       ...ticket('APPOINTMENT', '2026-10-14T08:00:00.000Z', '2026-10-14T09:00:00.000Z'),
       storeId: 'komotini',
     }]);
 
-    assert.equal(repository.firstCall('100', 'alexandroupoli').outcome, 'late');
-    assert.equal(repository.firstCall('100', 'komotini').outcome, 'on_time');
+    assert.equal((await repository.firstCall('100', 'alexandroupoli')).outcome, 'late');
+    assert.equal((await repository.firstCall('100', 'komotini')).outcome, 'on_time');
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 

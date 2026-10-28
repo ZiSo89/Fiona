@@ -105,8 +105,8 @@ export async function syncProjectTracker({
   now = () => new Date(),
 }) {
   const currentTime = now();
-  const cutoverAt = repository.ensureCutoverAt(currentTime);
-  const remappedExisting = repository.applyCategoryMap(categoryMap, currentTime.toISOString());
+  const cutoverAt = await repository.ensureCutoverAt(currentTime);
+  const remappedExisting = await repository.applyCategoryMap(categoryMap, currentTime.toISOString());
   const workDates = fionaDateRange(cutoverAt, currentTime, lookbackDays);
   const summary = {
     stores: stores.length,
@@ -127,7 +127,7 @@ export async function syncProjectTracker({
   const storesById = new Map(stores.map((store) => [store.storeId, store]));
 
   summary.remappedObsolete = 0;
-  for (const job of repository.getJobsWithObsoleteCategory()) {
+  for (const job of await repository.getJobsWithObsoleteCategory()) {
     const store = storesById.get(job.storeId);
     const client = store && (clients instanceof Map ? clients.get(store.storeId) : clients(store.storeId));
     if (!client) continue;
@@ -135,18 +135,19 @@ export async function syncProjectTracker({
       await pause();
       const details = await client.orderDetails(job.orderId);
       const fields = readCategoryFields({}, details, categoryMap);
-      if (fields.category && repository.remapObsoleteJob(
+      if (fields.category && (await repository.remapObsoleteJob(
         job.storeId,
         job.orderId,
         fields.category.id,
         fields.sourceCategoryId,
         currentTime.toISOString(),
-      )) summary.remappedObsolete += 1;
-    } catch {
+      ))) summary.remappedObsolete += 1;
+    } catch (error) {
+      if (error.isDatabaseError) throw error;
       summary.failed += 1;
     }
   }
-  for (const job of repository.getJobsNeedingScoring(PROJECT_TRACKER_SCORING_RULE_VERSION)) {
+  for (const job of await repository.getJobsNeedingScoring(PROJECT_TRACKER_SCORING_RULE_VERSION)) {
     const store = storesById.get(job.storeId);
     if (!store) continue;
     const client = clients instanceof Map ? clients.get(store.storeId) : clients(store.storeId);
@@ -181,7 +182,7 @@ export async function syncProjectTracker({
 
     const sourceCategoryId = readCategoryFields({}, details, categoryMap).sourceCategoryId
       || job.sourceCategoryId;
-    if (repository.updateJobScoring(
+    if (await repository.updateJobScoring(
       job.storeId,
       job.orderId,
       pointsOverride,
@@ -211,7 +212,7 @@ export async function syncProjectTracker({
         const orderId = rawOrderId === null || rawOrderId === undefined ? '' : String(rawOrderId).trim();
         if (!orderId) continue;
         summary.seen += 1;
-        const existingJob = repository.getJob(store.storeId, orderId);
+        const existingJob = await repository.getJob(store.storeId, orderId);
         if (existingJob) {
           summary.alreadyPresent += 1;
           const teamGroupName = fieldText(order?.teamGroupName);
@@ -227,7 +228,7 @@ export async function syncProjectTracker({
             const assignedTeamName = cleanTeamName(order?.teamName)
               || cleanTeamName(findOrderField(details, 'teamName'));
             if (assignedTeamName
-              && repository.updateJobTeamName(store.storeId, orderId, assignedTeamName)) {
+              && (await repository.updateJobTeamName(store.storeId, orderId, assignedTeamName))) {
               summary.teamUpdated += 1;
             }
           }
@@ -289,7 +290,7 @@ export async function syncProjectTracker({
         } else if (isSuccessfulVisit(categoryFields.category?.id, closingCategory)) {
           pointsOverride = null;
         }
-        if (repository.insertJob({
+        if (await repository.insertJob({
           pointsOverride,
           storeId: store.storeId,
           orderId,

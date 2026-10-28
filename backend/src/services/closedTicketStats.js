@@ -52,18 +52,18 @@ function median(values) {
   return Number((sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2).toFixed(1));
 }
 
-function monthRows(month, closedRepository) {
+async function monthRows(month, closedRepository) {
   const [year, number] = month.split('-').map(Number);
   const monthIndex = number - 1;
   const dayMs = 24 * 60 * 60 * 1000;
   // Pad by a day so the Athens-local month boundary is exact after filtering.
   const from = new Date(Date.UTC(year, monthIndex, 1) - dayMs).toISOString();
   const to = new Date(Date.UTC(year, monthIndex + 1, 1) + dayMs).toISOString();
-  return closedRepository.listClosedBetween(from, to)
+  return (await closedRepository.listClosedBetween(from, to))
     .filter((row) => athensMonthOf(row.closed_at) === month);
 }
 
-function summarizeRows(month, rows, observationRepository, includeTickets) {
+async function summarizeRows(month, rows, observationRepository, includeTickets) {
   const totals = { total: rows.length, onTime: 0, late: 0, unknown: 0 };
   const teams = new Map();
   const services = new Map();
@@ -99,7 +99,7 @@ function summarizeRows(month, rows, observationRepository, includeTickets) {
       map.set(mapKey, item);
     }
 
-    const call = observationRepository.firstCall(row.order_id, row.store_id);
+    const call = await observationRepository.firstCall(row.order_id, row.store_id);
     firstCall[call.outcome === 'on_time' ? 'onTime' : call.outcome === 'late' ? 'late' : 'unknown'] += 1;
 
     const date = localDateParts(row.closed_at);
@@ -200,8 +200,8 @@ function comparisonSummary(stats) {
   };
 }
 
-export function getClosedTicketDetails(orderId, closedRepository, storeId) {
-  const row = closedRepository.getByOrderId(orderId, storeId);
+export async function getClosedTicketDetails(orderId, closedRepository, storeId) {
+  const row = await closedRepository.getByOrderId(orderId, storeId);
   if (!row) return null;
   return {
     storeId: row.store_id,
@@ -223,7 +223,7 @@ export function getClosedTicketDetails(orderId, closedRepository, storeId) {
   };
 }
 
-export function buildMonthlyStats(month, closedRepository, observationRepository) {
+export async function buildMonthlyStats(month, closedRepository, observationRepository) {
   const match = /^(\d{4})-(0[1-9]|1[0-2])$/.exec(String(month));
   if (!match) {
     const error = new Error('month must use YYYY-MM');
@@ -233,8 +233,8 @@ export function buildMonthlyStats(month, closedRepository, observationRepository
   const [year, number] = month.split('-').map(Number);
   const previousMonthDate = new Date(Date.UTC(year, number - 2, 1));
   const previousMonth = `${previousMonthDate.getUTCFullYear()}-${String(previousMonthDate.getUTCMonth() + 1).padStart(2, '0')}`;
-  const currentStats = summarizeRows(month, monthRows(month, closedRepository), observationRepository, true);
-  const previousStats = summarizeRows(previousMonth, monthRows(previousMonth, closedRepository), observationRepository, false);
+  const currentStats = await summarizeRows(month, await monthRows(month, closedRepository), observationRepository, true);
+  const previousStats = await summarizeRows(previousMonth, await monthRows(previousMonth, closedRepository), observationRepository, false);
   return {
     ...currentStats,
     comparison: {

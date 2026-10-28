@@ -65,17 +65,17 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
   let consecutiveEmptySnapshots = 0;
 
   async function finalizeVanished(openOrderIds) {
-    const pending = repository.listDuePending(now()).filter((row) => !openOrderIds.has(row.order_id));
+    const pending = (await repository.listDuePending(now())).filter((row) => !openOrderIds.has(row.order_id));
     const summary = { inserted: 0, retry: 0, dropped: 0 };
     const dailyCache = new Map();
 
     for (const row of pending.slice(0, MAX_PER_RUN)) {
-      const giveUp = () => {
+      const giveUp = async () => {
         if (row.attempts + 1 >= MAX_ATTEMPTS) {
-          repository.removePending(row.order_id);
+          await repository.removePending(row.order_id);
           summary.dropped += 1;
         } else {
-          repository.schedulePendingRetry(row.order_id, new Date(now().getTime() + retryDelay(row.attempts)));
+          await repository.schedulePendingRetry(row.order_id, new Date(now().getTime() + retryDelay(row.attempts)));
           summary.retry += 1;
         }
       };
@@ -85,7 +85,7 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
         const order = { orderId: row.order_id, serviceOrderId: row.service_order_id };
         const preliminaryRecord = buildClosedTicketRecord(order, details, {}, null, now());
         if (!preliminaryRecord) {
-          giveUp();
+          await giveUp();
           continue;
         }
         const crewOnly = createGroupFilter(client, details);
@@ -102,7 +102,7 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
         const comment = await client.fetchLatestCommentWithSession(row.order_id);
         const record = buildClosedTicketRecord(order, details, workOrderData, comment, now());
         if (!record) {
-          repository.removePending(row.order_id);
+          await repository.removePending(row.order_id);
           continue;
         }
         // The record builder falls back to the details' team, which can be the group name.
@@ -110,25 +110,25 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
 
         // The crew can appear in Fiona's daily list later; wait instead of storing a ticket without one.
         if (!record.team_name && row.attempts + 1 < MAX_ATTEMPTS) {
-          repository.schedulePendingRetry(row.order_id, new Date(now().getTime() + retryDelay(row.attempts)));
+          await repository.schedulePendingRetry(row.order_id, new Date(now().getTime() + retryDelay(row.attempts)));
           summary.retry += 1;
           continue;
         }
-        const alreadyStored = repository.hasOrder(row.order_id);
+        const alreadyStored = await repository.hasOrder(row.order_id);
         const saved = alreadyStored
-          ? repository.updateExisting(record)
-          : repository.insert(record);
+          ? await repository.updateExisting(record)
+          : await repository.insert(record);
         if (saved && !alreadyStored) summary.inserted += 1;
 
         if (!record.work_order_sla_date) {
-          repository.schedulePendingRetry(row.order_id, new Date(now().getTime() + retryDelay(row.attempts)));
+          await repository.schedulePendingRetry(row.order_id, new Date(now().getTime() + retryDelay(row.attempts)));
           summary.retry += 1;
         } else {
-          repository.removePending(row.order_id);
+          await repository.removePending(row.order_id);
         }
       } catch (error) {
         console.error(`Closing order ${row.order_id} failed:`, error?.message);
-        repository.schedulePendingRetry(row.order_id, new Date(now().getTime() + retryDelay(row.attempts)));
+        await repository.schedulePendingRetry(row.order_id, new Date(now().getTime() + retryDelay(row.attempts)));
         summary.retry += 1;
       }
     }
@@ -159,10 +159,10 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
 
       running = true;
       try {
-        repository.trackOpen(rows, now());
-        repository.trackUnknownClosed(now());
+        await repository.trackOpen(rows, now());
+        await repository.trackUnknownClosed(now());
         // Re-resolve rows that were stored with a group name instead of the assigned crew.
-        repository.trackGroupNamedClosed(cleanTeamName(client.config?.closedServiceGroupMatch), now());
+        await repository.trackGroupNamedClosed(cleanTeamName(client.config?.closedServiceGroupMatch), now());
         return await finalizeVanished(openOrderIds);
       } finally {
         running = false;

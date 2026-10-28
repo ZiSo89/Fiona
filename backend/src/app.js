@@ -13,14 +13,14 @@ import { createTicketsRoutes } from './routes/ticketsRoutes.js';
 import { createClosedTicketsRoutes } from './routes/closedTicketsRoutes.js';
 import { mountStaticApps } from './routes/staticRoutes.js';
 
-export function createApp() {
+export async function createApp() {
   const app = express();
   app.set('trust proxy', 'loopback');
   app.use(cors());
   app.use(express.json());
 
   const auth = createAuth(config.appPassword);
-  const projectTrackerRepository = createProjectTrackerRepository(config.closedTicketsDbPath);
+  const projectTrackerRepository = await createProjectTrackerRepository(config.closedTicketsDbPath);
   const projectTrackerAuth = createProjectTrackerAuth({
     teamPasswords: config.projectTrackerTeamPasswords,
     adminPassword: config.projectTrackerAdminPassword,
@@ -33,7 +33,7 @@ export function createApp() {
     stores: config.fionaStores,
     getEditorDetails: createProjectTrackerEditorDetails({
       getClient: getFionaClient,
-      getStoredDetails: (storeId, orderId) => getStatsRepositories(storeId).closed.getTrackerEditorDetails(orderId, storeId),
+      getStoredDetails: async (storeId, orderId) => await (await getStatsRepositories(storeId)).closed.getTrackerEditorDetails(orderId, storeId),
       getCachedDetails: projectTrackerRepository.getEditorDetailsCache,
       saveCachedDetails: projectTrackerRepository.saveEditorDetailsCache,
     }),
@@ -45,6 +45,11 @@ export function createApp() {
   app.use('/api/closed-tickets', createClosedTicketsRoutes());
 
   mountStaticApps(app);
+  app.use((error, req, res, next) => {
+    console.error('Request failed:', error.code || error.name);
+    if (res.headersSent) return next(error);
+    return res.status(500).json({ success: false, message: 'Unable to access application data' });
+  });
 
   return { app, projectTrackerRepository };
 }

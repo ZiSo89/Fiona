@@ -4,12 +4,19 @@ import { createTicketObservationRepository } from './ticketObservationRepository
 
 const statsRepositories = new Map();
 
-export function getStatsRepositories(storeId) {
+export async function getStatsRepositories(storeId) {
   if (!statsRepositories.has(storeId)) {
-    statsRepositories.set(storeId, {
-      closed: createClosedTicketRepository(config.closedTicketsDbPath, storeId),
-      observations: createTicketObservationRepository(config.closedTicketsDbPath, storeId),
-    });
+    const pending = (async () => {
+      const closed = await createClosedTicketRepository(config.closedTicketsDbPath, storeId);
+      try {
+        return { closed, observations: await createTicketObservationRepository(config.closedTicketsDbPath, storeId) };
+      } catch (error) {
+        await closed.close();
+        throw error;
+      }
+    })();
+    statsRepositories.set(storeId, pending);
+    pending.catch(() => statsRepositories.delete(storeId));
   }
   return statsRepositories.get(storeId);
 }

@@ -48,6 +48,40 @@ jobs:
       - name: Build frontend
         run: npm run build --prefix frontend
 
+  mariadb-tests:
+    name: MariaDB storage and migration
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: fiona-ci-only
+          MARIADB_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm ci --prefix backend
+      - name: Test real MariaDB storage and migration
+        run: npm run test:mysql --prefix backend
+        env:
+          RUN_MYSQL_TESTS: "1"
+          DB_HOST: 127.0.0.1
+          DB_PORT: "3306"
+          DB_USER: root
+          DB_PASSWORD: fiona-ci-only
+
   tracker-build:
     name: Tracker build
     runs-on: ubuntu-latest

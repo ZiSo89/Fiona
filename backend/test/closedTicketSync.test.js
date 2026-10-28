@@ -40,7 +40,7 @@ test('parses and lists inclusive DD.MM.YYYY ranges and rejects invalid dates', (
 });
 
 test('syncs only new completed orders and skips duplicates before detail requests', async () => {
-  const repository = createClosedTicketRepository(':memory:');
+  const repository = await createClosedTicketRepository(':memory:');
   const detailIds = [];
   const dailyDates = [];
   const progress = [];
@@ -79,17 +79,17 @@ test('syncs only new completed orders and skips duplicates before detail request
     assert.equal(summary.inserted, 1);
     assert.equal(summary.notCompleted, 1);
     assert.equal(summary.duplicateInRange, 1);
-    assert.equal(repository.count(), 1);
+    assert.equal(await repository.count(), 1);
     assert.ok(progress.includes('[1/2] 14.10.2026: fetching workorders...'));
     assert.ok(progress.some((message) => message.includes('saved order 1')));
     assert.equal(progress.some((message) => message.includes('Customer')), false);
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
 test('reports the underlying workorder request error in progress and summary', async () => {
-  const repository = createClosedTicketRepository(':memory:');
+  const repository = await createClosedTicketRepository(':memory:');
   const progress = [];
 
   try {
@@ -110,12 +110,12 @@ test('reports the underlying workorder request error in progress and summary', a
     assert.equal(summary.failures[0].message, 'socket hang up');
     assert.ok(progress.some((message) => message.includes('failed to fetch workorders: socket hang up')));
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
 test('a repeated sync run skips existing orders without fetching details or updating rows', async () => {
-  const repository = createClosedTicketRepository(':memory:');
+  const repository = await createClosedTicketRepository(':memory:');
   const order = createOrder('1');
   const daily = async () => [order];
   const baseClient = {
@@ -144,14 +144,14 @@ test('a repeated sync run skips existing orders without fetching details or upda
     assert.equal(first.inserted, 1);
     assert.equal(second.alreadyPresent, 1);
     assert.equal(detailCalls, 0);
-    assert.equal(repository.count(), 1);
+    assert.equal(await repository.count(), 1);
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
 test('refresh mode updates existing completed orders without inserting duplicates', async () => {
-  const repository = createClosedTicketRepository(':memory:');
+  const repository = await createClosedTicketRepository(':memory:');
   const order = createOrder('refresh');
   let refreshMode = false;
   const client = {
@@ -175,24 +175,24 @@ test('refresh mode updates existing completed orders without inserting duplicate
 
   try {
     assert.equal((await syncClosedTickets(options)).inserted, 1);
-    assert.equal(repository.listClosedBetween('2026-10-14T00:00:00.000Z', '2026-10-15T00:00:00.000Z')[0].work_order_sla_outcome, 'on_time');
+    assert.equal((await repository.listClosedBetween('2026-10-14T00:00:00.000Z', '2026-10-15T00:00:00.000Z'))[0].work_order_sla_outcome, 'on_time');
 
     refreshMode = true;
     const summary = await syncClosedTickets({ ...options, refreshExisting: true });
-    const [updated] = repository.listClosedBetween('2026-10-14T00:00:00.000Z', '2026-10-15T00:00:00.000Z');
+    const [updated] = await repository.listClosedBetween('2026-10-14T00:00:00.000Z', '2026-10-15T00:00:00.000Z');
     assert.equal(summary.refreshed, 1);
     assert.equal(summary.inserted, 0);
     assert.equal(summary.alreadyPresent, 0);
-    assert.equal(repository.count(), 1);
+    assert.equal(await repository.count(), 1);
     assert.equal(updated.work_order_sla_date, '2026-10-14T06:00:00.000Z');
     assert.equal(updated.work_order_sla_outcome, 'late');
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
 test('refresh mode restores the assigned team from workorders when order details team is empty', async () => {
-  const repository = createClosedTicketRepository(':memory:');
+  const repository = await createClosedTicketRepository(':memory:');
   let order = { ...createOrder('missing-team'), teamName: null };
   let details = createDetails('missing-team');
   const client = {
@@ -214,21 +214,21 @@ test('refresh mode restores the assigned team from workorders when order details
 
   try {
     assert.equal((await syncClosedTickets(options)).inserted, 1);
-    assert.equal(repository.getByOrderId('missing-team').team_name, null);
+    assert.equal((await repository.getByOrderId('missing-team')).team_name, null);
 
     order = { ...order, teamName: 'Assigned Crew' };
     details = { ...details, orderData: { ...details.orderData, teamName: '' } };
     const summary = await syncClosedTickets({ ...options, refreshExisting: true });
 
     assert.equal(summary.refreshed, 1);
-    assert.equal(repository.getByOrderId('missing-team').team_name, 'Assigned Crew');
+    assert.equal((await repository.getByOrderId('missing-team')).team_name, 'Assigned Crew');
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
 test('refresh mode preserves existing data when enrichment fails', async () => {
-  const repository = createClosedTicketRepository(':memory:');
+  const repository = await createClosedTicketRepository(':memory:');
   const options = {
     repository,
     fromDate: parseDateRangeValue('14.10.2026'),
@@ -250,7 +250,7 @@ test('refresh mode preserves existing data when enrichment fails', async () => {
         fetchLatestCommentWithSession: async () => null,
       },
     });
-    const [before] = repository.listClosedBetween(...dateRange);
+    const [before] = await repository.listClosedBetween(...dateRange);
 
     const summary = await syncClosedTickets({
       ...options,
@@ -262,17 +262,17 @@ test('refresh mode preserves existing data when enrichment fails', async () => {
         fetchLatestCommentWithSession: async () => null,
       },
     });
-    const [after] = repository.listClosedBetween(...dateRange);
+    const [after] = await repository.listClosedBetween(...dateRange);
 
     assert.equal(summary.failed, 1);
     assert.deepEqual(after, before);
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
 test('uses order details as the completed-status source when the daily listing is stale', async () => {
-  const repository = createClosedTicketRepository(':memory:');
+  const repository = await createClosedTicketRepository(':memory:');
   const order = { ...createOrder('changed'), orderStatus: 'OPEN' };
   const client = {
     dailyWorkorders: async () => [order],
@@ -294,14 +294,14 @@ test('uses order details as the completed-status source when the daily listing i
     });
 
     assert.equal(summary.inserted, 1);
-    assert.equal(repository.hasOrder('changed'), true);
+    assert.equal(await repository.hasOrder('changed'), true);
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
 test('stores only orders whose service group name matches the store', async () => {
-  const repository = createClosedTicketRepository(':memory:', 'komotini');
+  const repository = await createClosedTicketRepository(':memory:', 'komotini');
   const withGroup = (orderId, serviceGroup) => {
     const details = createDetails(orderId);
     details.orderData.serviceGroup = serviceGroup;
@@ -331,10 +331,10 @@ test('stores only orders whose service group name matches the store', async () =
 
     assert.equal(summary.inserted, 1);
     assert.equal(summary.otherStore, 1);
-    assert.equal(repository.hasOrder('own'), true);
-    assert.equal(repository.hasOrder('other'), false);
+    assert.equal(await repository.hasOrder('own'), true);
+    assert.equal(await repository.hasOrder('other'), false);
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
@@ -368,11 +368,11 @@ test('parses CLI dates and repeated service-group options', () => {
 });
 
 test('exports matching closed tickets and date/store metadata as JSON', async () => {
-  const repository = createClosedTicketRepository(':memory:', 'komotini');
+  const repository = await createClosedTicketRepository(':memory:', 'komotini');
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'fiona-closed-ticket-export-'));
   const outputPath = path.join(directory, 'exports', 'tickets.json');
   try {
-    repository.insert({
+    await repository.insert({
       store_id: 'komotini',
       order_id: 'exported',
       service_order_id: null,
@@ -413,13 +413,13 @@ test('exports matching closed tickets and date/store metadata as JSON', async ()
     assert.equal(data.count, 1);
     assert.equal(data.records[0].order_id, 'exported');
   } finally {
-    repository.close();
+    await repository.close();
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
 
 test('does not persist a partial ticket when enrichment fails', async () => {
-  const repository = createClosedTicketRepository(':memory:');
+  const repository = await createClosedTicketRepository(':memory:');
   const client = {
     dailyWorkorders: async () => [createOrder('partial')],
     orderDetails: async () => createDetails('partial'),
@@ -438,8 +438,8 @@ test('does not persist a partial ticket when enrichment fails', async () => {
       wait: async () => {},
     });
     assert.equal(summary.failed, 1);
-    assert.equal(repository.count(), 0);
+    assert.equal(await repository.count(), 0);
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
