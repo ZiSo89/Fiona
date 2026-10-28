@@ -6,8 +6,8 @@ import { createProjectTrackerRoutes } from '../src/routes/projectTrackerRoutes.j
 import { createProjectTrackerRepository } from '../src/repositories/projectTrackerRepository.js';
 
 async function withApi(run) {
-  const repository = createProjectTrackerRepository(':memory:');
-  repository.insertJob({
+  const repository = await createProjectTrackerRepository(':memory:');
+  await repository.insertJob({
     storeId: 'alexandroupoli',
     orderId: 'order-1',
     teamName: 'Team One',
@@ -47,7 +47,7 @@ async function withApi(run) {
   try {
     await run(url);
   } finally {
-    repository.close();
+    await repository.close();
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 }

@@ -21,30 +21,35 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
   const router = express.Router();
   const storeNames = Object.fromEntries(stores.map((store) => [store.storeId, store.storeName]));
 
-  router.get('/profiles', (req, res) => {
-    return res.json({ success: true, profiles: repository.getProfiles(storeNames) });
+  router.get('/profiles', async (req, res, next) => {
+    try {
+      return res.json({ success: true, profiles: await repository.getProfiles(storeNames) });
+    } catch (error) {
+      return next(error);
+    }
   });
 
   router.post('/login', auth.login);
   router.post('/logout', auth.logout);
   router.get('/session', auth.session);
 
-  router.get('/month', (req, res) => {
+  router.get('/month', async (req, res, next) => {
     try {
       const scope = scopeFromQuery(req, res);
       if (!scope) return undefined;
       const month = String(req.query.month ?? athensMonthOf(new Date()));
-      const jobs = repository.getMonthJobs(month, scope.storeId, scope.teamName);
+      const jobs = await repository.getMonthJobs(month, scope.storeId, scope.teamName);
       const paymentLock = scope.storeId && scope.teamName
-        ? repository.getMonthLock(scope.storeId, scope.teamName, month)
+        ? await repository.getMonthLock(scope.storeId, scope.teamName, month)
         : { locked: false, changedAt: null };
       return res.json({ success: true, ...buildProjectTrackerMonth(month, jobs), paymentLock });
     } catch (error) {
+      if (error.isDatabaseError) return next(error);
       return res.status(400).json({ success: false, message: error.message });
     }
   });
 
-  router.get('/day', (req, res) => {
+  router.get('/day', async (req, res, next) => {
     try {
       const scope = scopeFromQuery(req, res);
       if (!scope) return undefined;
@@ -52,14 +57,15 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
       return res.json({
         success: true,
         date,
-        jobs: repository.getDayJobs(date, scope.storeId, scope.teamName),
+        jobs: await repository.getDayJobs(date, scope.storeId, scope.teamName),
       });
     } catch (error) {
+      if (error.isDatabaseError) return next(error);
       return res.status(400).json({ success: false, message: error.message });
     }
   });
 
-  router.get('/jobs/:orderId/details', auth.requireAuth, async (req, res) => {
+  router.get('/jobs/:orderId/details', auth.requireAuth, async (req, res, next) => {
     const orderId = String(req.params.orderId ?? '');
     const storeId = String(req.query.storeId ?? '').trim();
     const teamName = String(req.query.teamName ?? '').trim();
@@ -69,21 +75,21 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
     if (!canAccessTeam(req.trackerEditor, storeId, teamName)) {
       return res.status(403).json({ success: false, message: 'Editor is not authorized for this team' });
     }
-    const job = repository.getJob(storeId, orderId);
-    if (!job || job.teamName !== teamName) {
-      return res.status(404).json({ success: false, message: 'Tracker job not found for this team' });
-    }
-
     try {
+      const job = await repository.getJob(storeId, orderId);
+      if (!job || job.teamName !== teamName) {
+        return res.status(404).json({ success: false, message: 'Tracker job not found for this team' });
+      }
       const details = await getEditorDetails({ storeId, teamName, orderId });
       if (!details) return res.status(404).json({ success: false, message: 'Details not found' });
       return res.json({ success: true, details });
-    } catch {
+    } catch (error) {
+      if (error.isDatabaseError) return next(error);
       return res.status(502).json({ success: false, message: 'Unable to load Fiona details' });
     }
   });
 
-  router.put('/jobs/:orderId', auth.requireAuth, (req, res) => {
+  router.put('/jobs/:orderId', auth.requireAuth, async (req, res, next) => {
     const { storeId, teamName, categoryId, pointsOverride } = req.body ?? {};
     const orderId = String(req.params.orderId ?? '');
     if (!/^[\w-]{1,40}$/.test(orderId)) {
@@ -100,7 +106,7 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
     }
 
     try {
-      const job = repository.correctJob({
+      const job = await repository.correctJob({
         storeId,
         orderId,
         teamName,
@@ -112,12 +118,13 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
       if (!job) return res.status(404).json({ success: false, message: 'Tracker job not found for this team' });
       return res.json({ success: true, job });
     } catch (error) {
+      if (error.isDatabaseError) return next(error);
       const status = error.code === 'PROJECT_TRACKER_MONTH_LOCKED' ? 409 : 400;
       return res.status(status).json({ success: false, message: error.message });
     }
   });
 
-  router.put('/month-lock', auth.requireAuth, (req, res) => {
+  router.put('/month-lock', auth.requireAuth, async (req, res, next) => {
     if (req.trackerEditor.role !== 'admin') {
       return res.status(403).json({ success: false, message: 'Admin access required' });
     }
@@ -129,7 +136,7 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
       return res.status(400).json({ success: false, message: 'Invalid month lock request' });
     }
     try {
-      const paymentLock = repository.setMonthLock({
+      const paymentLock = await repository.setMonthLock({
         storeId: storeId.trim(),
         teamName: teamName.trim(),
         month,
@@ -138,6 +145,7 @@ export function createProjectTrackerRoutes({ repository, auth, stores = [], getE
       });
       return res.json({ success: true, paymentLock });
     } catch (error) {
+      if (error.isDatabaseError) return next(error);
       return res.status(400).json({ success: false, message: error.message });
     }
   });

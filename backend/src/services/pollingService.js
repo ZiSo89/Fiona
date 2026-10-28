@@ -89,21 +89,32 @@ export function createPollingService(client, pollIntervalMs, onTickets = () => {
 
 const fionaClients = new Map();
 
-function createStorePollingService(store) {
+async function createStorePollingService(store) {
   const client = new FionaClient(store);
   fionaClients.set(store.storeId, client);
-  const observations = createTicketObservationRepository(config.closedTicketsDbPath, store.storeId);
-  const repository = createClosedTicketRepository(config.closedTicketsDbPath, store.storeId);
+  const observations = await createTicketObservationRepository(config.closedTicketsDbPath, store.storeId);
+  const repository = await createClosedTicketRepository(config.closedTicketsDbPath, store.storeId);
   const finalizer = createClosedTicketFinalizer({ client, repository });
-  const recordObservations = (tickets, observedAt) => {
-    observations.record(tickets, observedAt);
+  const recordObservations = async (tickets, observedAt) => {
+    await observations.record(tickets, observedAt);
     return finalizer.process(tickets);
   };
   return createPollingService(client, config.pollIntervalMs, recordObservations, store);
 }
 
 const configuredStores = config.fionaStores.filter((store) => store.configured);
-const pollingServices = new Map(configuredStores.map((store) => [store.storeId, createStorePollingService(store)]));
+const pollingServices = new Map();
+let initialization;
+export function initializePolling() {
+  if (!initialization) {
+    initialization = (async () => {
+      for (const store of configuredStores) {
+        pollingServices.set(store.storeId, await createStorePollingService(store));
+      }
+    })();
+  }
+  return initialization;
+}
 const defaultStoreId = configuredStores.find((store) => store.storeId === 'alexandroupoli')?.storeId
   || configuredStores[0]?.storeId;
 

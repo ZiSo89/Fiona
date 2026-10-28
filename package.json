@@ -6,9 +6,13 @@
     "dev:backend": "npm --prefix backend run dev",
     "dev:frontend": "npm --prefix frontend run dev -- --host 0.0.0.0 --port 5173",
     "dev:tracker": "npm --prefix project-tracker run dev",
-    "build:render": "npm ci --prefix backend && npm ci --prefix frontend --include=dev && npm ci --prefix project-tracker --include=dev && npm run build:frontend && npm run build:tracker",
+    "build:render": "npm ci --prefix backend && npm run build:clients",
+    "build:plesk": "npm ci --prefix backend --omit=optional && npm run build:clients",
+    "build:clients": "npm ci --prefix frontend --include=dev && npm ci --prefix project-tracker --include=dev && npm run build:frontend && npm run build:tracker",
     "build:frontend": "npm --prefix frontend run build",
     "build:tracker": "npm --prefix project-tracker run build",
+    "db:import": "npm --prefix backend run db:import --",
+    "db:export": "npm --prefix backend run db:export --",
     "start:backend": "npm --prefix backend run start"
   }
 }

@@ -63,8 +63,8 @@ backend/src/
   controllers/     χειρισμός request/response, επικύρωση παραμέτρων
   middleware/      auth και session έλεγχοι
   services/        επιχειρησιακή λογική (Fiona client, polling, SLA, στατιστικά, sync)
-  repositories/    πρόσβαση στη SQLite
-  cli/             εντολές γραμμής εντολών (sync:closed)
+  repositories/    ασύγχρονη πρόσβαση σε SQLite ή MySQL/MariaDB
+  cli/             συγχρονισμός και μεταφορά βάσης
 ```
 
 ```text
@@ -85,10 +85,11 @@ frontend/src/
 - `frontend/`: React 18, Vite και PWA service worker στο `/app/`. Η ρίζα `/` ανακατευθύνει στο `/app/`, ενώ η διεπαφή ζητά δεδομένα από το ίδιο origin μέσω `/api/*`. Το production build βρίσκεται στο `frontend/dist`.
 - `project-tracker/`: ξεχωριστό React/Vite PWA στο `/tracker/`, με δικό του manifest και service worker scope. Χρησιμοποιεί μόνο τα περιορισμένα `/api/tracker/*` endpoints.
 - `backend/`: Node.js ES modules και Express. Κάθε ρυθμισμένο κατάστημα έχει ξεχωριστό Fiona client, session token και polling snapshot. Ο normalizer μετατρέπει κάθε απάντηση στο contract της διεπαφής και προσθέτει την ταυτότητα καταστήματος.
-- Οι πίνακες `project_tracker_*` αποθηκεύουν order ID, κατάστημα, συνεργείο, κατηγορία, ώρα ολοκλήρωσης, πόντους/overrides, audit log και κλειδώματα πληρωμής ανά μήνα/συνεργείο. Χρησιμοποιούν την ίδια SQLite διαδρομή με τα closed tickets, αλλά ξεχωριστό schema.
+- Οι πίνακες `project_tracker_*` αποθηκεύουν order ID, κατάστημα, συνεργείο, κατηγορία, ώρα ολοκλήρωσης, πόντους/overrides, audit log και κλειδώματα πληρωμής ανά μήνα/συνεργείο. Χρησιμοποιούν την ίδια βάση με τα closed tickets.
 - Ο Express server σερβίρει το frontend και το API από την ίδια θύρα. Η προεπιλεγμένη θύρα είναι `4000` και αλλάζει με το `PORT`.
 - Το backend κρατά το πιο πρόσφατο snapshot στη μνήμη, χωριστά ανά κατάστημα. Το `POLL_INTERVAL_MS` ρυθμίζει το διάστημα polling: το `.env.example` ορίζει `300000` ms, ενώ ο fallback του κώδικα είναι `120000` ms. Η διεπαφή ζητά νέο snapshot περίπου κάθε 60 δευτερόλεπτα.
 - Η SQLite βάση βρίσκεται από προεπιλογή στο `backend/data/closed-tickets.sqlite`. Οι πίνακες ολοκληρωμένων, εκκρεμών και παρατηρήσεων περιλαμβάνουν `store_id`, ώστε όμοια Fiona order IDs από διαφορετικά καταστήματα να μην συγκρούονται. Πριν από την πρώτη migration δημιουργείται δίπλα στη βάση το `closed-tickets.sqlite.pre-store-migration.bak` και οι παλιές εγγραφές μεταφέρονται στο `alexandroupoli`.
+- Το `DB_CLIENT=sqlite` είναι η προεπιλογή. Με `DB_CLIENT=mysql` χρησιμοποιείται MySQL/MariaDB μέσω `mysql2`, χωρίς native compilation. Η SQLite εξάρτηση `better-sqlite3` είναι προαιρετική για την εγκατάσταση, αλλά απαιτείται για SQLite λειτουργία, tests και τοπικό export. Αποτυχία σύνδεσης MySQL δεν προκαλεί fallback σε SQLite. Όλα τα repository factories και οι λειτουργίες τους επιστρέφουν promises και πρέπει να γίνονται `await`.
 - Σε εντελώς κενό snapshot απαιτούνται δύο διαδοχικά επιτυχημένα polls, ώστε να αποκλειστεί προσωρινά κενή απάντηση. Το CLI `sync:closed` προορίζεται για ιστορική αναπλήρωση tickets που δεν είχαν καταγραφεί ως ανοιχτά πριν από shutdown.
 - Για SLA ολοκλήρωσης συγκρίνεται το `workOrderFinishedOnPremiseTime` με το `workOrderSlaDate`. Το `deadline` είναι προθεσμία πρώτης κλήσης και συγκρίνεται με την πρώτη παρατήρηση `CALL LATER` ή `APPOINTMENT`, όχι με την ώρα ολοκλήρωσης.
 
@@ -130,6 +131,66 @@ npm run dev:tracker
 npm --prefix backend test
 ```
 
+### Deployment στο Plesk με MariaDB
+
+Η διαδρομή αυτή προορίζεται για Linux Plesk με Node.js 22 και MariaDB 10.11. Η βάση παραμένει στο hosting, όχι στο PC. Τα ίδια queries υποστηρίζουν MySQL 8, αλλά ο έλεγχος integration γίνεται με MariaDB 10.11.
+
+1. Στο **Databases → Add Database** δημιούργησε άδεια βάση για το subdomain και ξεχωριστό χρήστη με πρόσβαση μόνο σε αυτήν, από τον τοπικό server. Κράτησε τα τελικά ονόματα βάσης/χρήστη που δίνει το Plesk, μαζί με τυχόν prefix. Μην ενεργοποιήσεις δημόσια πρόσβαση στη βάση.
+2. Ανέβασε το repository με **Git → Deploy** σε ιδιωτικό application directory, π.χ. `fiona`. Μην ανεβάσεις `node_modules` από Windows.
+3. Στο **Node.js** όρισε:
+   - **Application Root:** ο φάκελος `fiona` με το κεντρικό `package.json`.
+   - **Document Root:** κενός υποφάκελος `fiona/public`, τον οποίο δημιουργείς από File Manager. Όχι ο φάκελος του backend ή η ρίζα του repository.
+   - **Application Startup File:** `plesk.cjs`. Ο CommonJS loader εισάγει ασύγχρονα τον ES-module server για Passenger.
+   - **Application Mode:** `Production`, **Node.js Version:** 22.
+4. Στα **Custom environment variables** βάλε τα υφιστάμενα Fiona/app/tracker secrets και:
+
+   ```dotenv
+   DB_CLIENT=mysql
+   DB_HOST=127.0.0.1
+   DB_PORT=3306
+   DB_NAME=actual_plesk_database_name
+   DB_USER=actual_plesk_database_user
+   DB_PASSWORD=your_private_database_password
+   ```
+
+   Χρησιμοποίησε το host που επιβεβαιώνει ο πάροχος αν διαφέρει. Το `CLOSED_TICKETS_DB_PATH` αγνοείται στη MySQL λειτουργία. Μην ορίσεις χειροκίνητα `PORT` στο Plesk. Για εξωτερικό database server, το `DB_SSL_CA` δείχνει σε ιδιωτικό αρχείο CA ώστε να γίνεται επαλήθευση TLS· μην απενεργοποιείς την επαλήθευση πιστοποιητικού.
+5. Στο **Run script** εκτέλεσε `build:plesk`. Το script εγκαθιστά το backend με `--omit=optional`, χωρίς καν να επιχειρεί εγκατάσταση `better-sqlite3`, και χτίζει τα δύο frontends με τα devDependencies τους. Μην χρησιμοποιήσεις `build:render` σε server που δεν μπορεί να εγκαταστήσει native SQLite modules.
+6. **Αν μεταφέρεις παλιά δεδομένα, μην εκκινήσεις την εφαρμογή ακόμη:** ολοκλήρωσε πρώτα την επόμενη ενότητα. Ακόμη και η πρώτη εκκίνηση γράφει ρυθμίσεις/cutover και η εισαγωγή απαιτεί άδειους πίνακες.
+7. Ενεργοποίησε HTTPS/Let's Encrypt για το subdomain και μετά **Enable Node.js / Restart App**. Έλεγξε `/app/`, `/tracker/` και `/api/health`. Οι πίνακες δημιουργούνται αυτόματα με InnoDB, `utf8mb4_bin` και schema version 1. Ο χρήστης βάσης χρειάζεται DDL δικαιώματα μέσα στη συγκεκριμένη βάση για την αρχική εγκατάσταση και μελλοντικές migrations.
+
+Οι πολυβηματικές εγγραφές χρησιμοποιούν transactions στην ίδια σύνδεση του pool. Ένα κοινό InnoDB lock σειριοποιεί διορθώσεις, κλειδώματα μηνών και εισαγωγές μεταξύ διεργασιών. Οι ταυτότητες καταστήματος/order και τα ακριβή ονόματα συνεργείων παραμένουν διακριτά ως προς πεζά/κεφαλαία. Οι ISO ημερομηνίες παραμένουν strings ώστε να μην αλλάζουν οι κανόνες του ημερολογίου Αθήνας.
+
+Για το polling ζήτησε από τον πάροχο **ένα συνεχώς ενεργό instance**, χωρίς idle shutdown και με αυτόματη εκκίνηση μετά από reboot. Η μεταφορά σε MariaDB δεν καταργεί αυτούς τους περιορισμούς Passenger/shared hosting. Ρύθμισε και έλεγξε ξεχωριστά τα backups της βάσης στο Plesk.
+
+### Μεταφορά υπάρχουσας SQLite σε MariaDB
+
+Η μεταφορά περιλαμβάνει και τους 10 πίνακες: ιστορικό κλειστών tickets, εκκρεμή closures, παρατηρήσεις, monitoring, tracker settings/cutover, εργασίες, χειροκίνητες διορθώσεις/πόντους, κλειδώματα, audit και cached details. Δεν μεταφέρει κωδικούς, sessions ή τα προσωρινά polling snapshots της μνήμης.
+
+1. Σταμάτησε την παλιά εφαρμογή ώστε να μην προκύψουν νεότερες εγγραφές μετά το export. Κράτησε ασφαλές SQLite backup με εργαλείο SQLite ή αντίγραφο με την εφαρμογή κλειστή και όλες τις συνδέσεις τερματισμένες. Μην αντιγράφεις μόνο το `.sqlite` ενώ τρέχει η εφαρμογή με WAL.
+2. Στο PC όπου λειτουργεί η SQLite, με τις backend εξαρτήσεις εγκατεστημένες, εκτέλεσε από το project root:
+
+   ```powershell
+   npm run db:export -- --sqlite ".\backend\data\closed-tickets.sqlite" --file "$env:USERPROFILE\fiona-migration.json"
+   ```
+
+   Το export είναι read-only, χρησιμοποιεί συνεπές snapshot και δεν αντικαθιστά υπάρχον αρχείο export. Αν ανιχνευτεί παλιό schema, αναβάθμισε πρώτα την τοπική SQLite με τον τρέχοντα κώδικα και επανάλαβε το export.
+3. Ανέβασε το JSON μέσω ιδιωτικού καναλιού σε φάκελο **εκτός Document Root** στο hosting. Περιέχει προσωπικά δεδομένα πελατών: ποτέ στο Git, σε δημόσιο URL ή σε screenshot.
+4. Με το app του Plesk σταματημένο, εκτέλεσε από το application root με SSH ή μέσω **Run script**, περνώντας τα ίδια `DB_*` environment variables και τη σωστή Node του Plesk:
+
+   ```text
+   npm run db:import -- --file /absolute/private/path/fiona-migration.json
+   ```
+
+   Στο Plesk Run script επίλεξε `db:import` με τα arguments `-- --file /absolute/private/path/fiona-migration.json`. Αν ο πάροχος δεν επιτρέπει arguments ή δεν περνά τα Custom environment variables στην εντολή, ζήτησε να την εκτελέσει ιδιωτικά· μη γράψεις credentials σε scripts του repository.
+5. Η εισαγωγή ελέγχει format/checksum και απαιτεί **όλους τους πίνακες εφαρμογής άδειους**. Διατηρεί IDs, cutover, audit και locks, και ελέγχει κάθε τιμή που διαβάζεται ξανά πριν κάνει commit. Σε αποτυχία γίνεται rollback όλων των εγγραφών. Μια δεύτερη εισαγωγή απορρίπτεται, δεν κάνει merge ή overwrite.
+6. Έλεγξε τις μετρήσεις ανά πίνακα, ξεκίνησε το app και επιβεβαίωσε πόντους, κλειδώματα και ιστορικό. Οι κανονικοί κανόνες category/scoring migration συνεχίζουν να εφαρμόζονται στην εκκίνηση/στο sync όπως πριν. Κράτησε το αρχικό SQLite backup, αφαίρεσε το προσωρινό export από το hosting όταν δεν χρειάζεται και μην ξανανοίξεις την παλιά εγκατάσταση για εγγραφές.
+
+Για rollback σταμάτησε πρώτα τη νέα εφαρμογή και επίστρεψε στην παλιά εγκατάσταση/SQLite backup. Δεν υπάρχει αντίστροφο sync MariaDB → SQLite· εγγραφές που έγιναν μετά τη μετάβαση δεν επιστρέφουν αυτόματα.
+
+### Integration tests MariaDB
+
+Τα κανονικά backend tests χρησιμοποιούν SQLite. Για τα integration tests όρισε `RUN_MYSQL_TESTS=1`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD` και εκτέλεσε `npm run test:mysql --prefix backend`. Χρησιμοποίησε **μόνο απομονωμένο test server** και test χρήστη με δικαίωμα δημιουργίας/διαγραφής βάσης και triggers: το suite δημιουργεί δική του τυχαία βάση `fiona_test_*` και την αφαιρεί στο τέλος. Μην χρησιμοποιήσεις τα credentials του production hosting. Το CI εκτελεί το suite σε MariaDB 10.11.
+
 ### Deployment στο Render
 
 Δημιούργησε Node.js Web Service με κενό **Root Directory** (ρίζα του repository) και τις παρακάτω εντολές:
@@ -140,6 +201,22 @@ npm --prefix backend test
 Το `build:render` εγκαθιστά τις κλειδωμένες εξαρτήσεις του backend, του frontend και του tracker με `npm ci` και έπειτα χτίζει και τις δύο διεπαφές. Για τα δύο Vite apps περιλαμβάνει ρητά τα `devDependencies`, ακόμη και με `NODE_ENV=production`. Το σκέτο `npm install` στη ρίζα δεν εγκαθιστά τις εξαρτήσεις των υποφακέλων· αν εγκατασταθεί μόνο το backend, το build αποτυγχάνει με `vite: not found`.
 
 Αντικατάστησε το παλιό Build Command στις ρυθμίσεις του υπάρχοντος Render service και κάνε νέο deploy αφού ανέβουν οι αλλαγές. Ρύθμισε τα μυστικά του backend ως environment variables στο Render, όχι ως αρχεία στο repository. Για μόνιμη αποθήκευση της SQLite, όρισε το `CLOSED_TICKETS_DB_PATH` σε διαδρομή πάνω σε persistent disk.
+
+Δεν χρειάζεται ξεχωριστό Render Static Site: το ίδιο Web Service σερβίρει `/app/`, `/tracker/` και `/api/*`. Έτσι οι διεπαφές και τα session cookies παραμένουν στο ίδιο origin.
+
+### Εγκατάσταση PWA σε Android
+
+1. Άνοιξε στο Chrome τη δημόσια HTTPS διεύθυνση του service με `/app/` στο τέλος.
+2. Από το μενού ⋮ επίλεξε «Προσθήκη στην αρχική οθόνη» και, αν εμφανιστεί, «Εγκατάσταση εφαρμογής».
+3. Για ξεχωριστή εγκατάσταση του Team Points, επανάλαβε από το `/tracker/`. Τα δύο apps έχουν διαφορετικό manifest και service worker scope.
+
+Το HTTPS domain `onrender.com` αρκεί για εγκατάσταση· δεν απαιτείται αγορά domain. Η εγκατάσταση δεν αντικαθιστά τον server: για νεότερα δεδομένα και συγχρονισμό χρειάζεται σύνδεση στο διαδίκτυο.
+
+### Προαιρετικό custom domain
+
+Αν έχεις δικό σου domain, πρόσθεσε το επιθυμητό subdomain (π.χ. `fiona.example.gr`) στο **Settings → Custom Domains** του ίδιου Render Web Service. Ρύθμισε τα DNS στον πάροχό σου σύμφωνα με τις εγγραφές που εμφανίζει το Render και πάτησε **Verify**. Το Render εκδίδει και ανανεώνει το πιστοποιητικό HTTPS. Δες τις [επίσημες οδηγίες custom domains](https://render.com/docs/custom-domains).
+
+Κάνε την εγκατάσταση PWA από το domain που θα χρησιμοποιείς μόνιμα. Αν αλλάξεις domain αργότερα, χρειάζεται νέα σύνδεση και εγκατάσταση από τη νέα διεύθυνση· τα session cookies και η τοπική cache δεν μεταφέρονται μεταξύ origins.
 
 ## Πρόσβαση μέσω Cloudflare Tunnel
 

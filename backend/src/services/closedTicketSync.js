@@ -109,7 +109,7 @@ export async function syncClosedTickets({
       }
       visitedOrderIds.add(orderId);
 
-      const alreadyStored = repository.hasOrder(orderId);
+      const alreadyStored = await repository.hasOrder(orderId);
       if (alreadyStored && !refreshExisting) {
         summary.alreadyPresent += 1;
         onProgress(`${dateProgress}: order ${orderId} is already in the database; skipped.`);
@@ -180,10 +180,10 @@ export async function syncClosedTickets({
         onProgress(`${dateProgress}: order ${orderId} no longer qualifies as completed; skipped.`);
         continue;
       }
-      if (alreadyStored && refreshExisting && repository.updateExisting(record)) {
+      if (alreadyStored && refreshExisting && (await repository.updateExisting(record))) {
         summary.refreshed += 1;
         onProgress(`${dateProgress}: refreshed order ${orderId}.`);
-      } else if (!alreadyStored && repository.insert(record)) {
+      } else if (!alreadyStored && (await repository.insert(record))) {
         summary.inserted += 1;
         onProgress(`${dateProgress}: saved order ${orderId}.`);
       } else if (alreadyStored && refreshExisting) {

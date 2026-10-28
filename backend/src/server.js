@@ -1,9 +1,10 @@
 import { config } from './config.js';
 import { createApp } from './app.js';
-import { getFionaClient, startPolling } from './services/pollingService.js';
+import { getFionaClient, initializePolling, startPolling } from './services/pollingService.js';
 import { createProjectTrackerSync } from './services/projectTrackerSync.js';
 
-const { app, projectTrackerRepository } = createApp();
+const { app, projectTrackerRepository } = await createApp();
+await initializePolling();
 
 app.listen(config.port, () => {
   console.log(`Fiona polling service listening on port ${config.port}`);

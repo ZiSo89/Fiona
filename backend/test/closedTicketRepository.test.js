@@ -33,55 +33,55 @@ const record = {
   imported_at: '2026-10-14T09:05:00.000Z',
 };
 
-test('closed-ticket repository inserts once and can skip an existing order', () => {
-  const repository = createClosedTicketRepository(':memory:');
+test('closed-ticket repository inserts once and can skip an existing order', async () => {
+  const repository = await createClosedTicketRepository(':memory:');
   try {
-    assert.equal(repository.hasOrder('123'), false);
-    assert.equal(repository.insert(record), true);
-    assert.equal(repository.hasOrder('123'), true);
-    assert.equal(repository.insert(record), false);
-    assert.equal(repository.count(), 1);
+    assert.equal(await repository.hasOrder('123'), false);
+    assert.equal(await repository.insert(record), true);
+    assert.equal(await repository.hasOrder('123'), true);
+    assert.equal(await repository.insert(record), false);
+    assert.equal(await repository.count(), 1);
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
-test('closed-ticket repository updates only an existing order', () => {
-  const repository = createClosedTicketRepository(':memory:');
+test('closed-ticket repository updates only an existing order', async () => {
+  const repository = await createClosedTicketRepository(':memory:');
   try {
-    assert.equal(repository.updateExisting(record), false);
-    assert.equal(repository.insert(record), true);
-    assert.equal(repository.insert({ ...record, work_order_sla_outcome: 'late' }), false);
+    assert.equal(await repository.updateExisting(record), false);
+    assert.equal(await repository.insert(record), true);
+    assert.equal(await repository.insert({ ...record, work_order_sla_outcome: 'late' }), false);
 
-    assert.equal(repository.updateExisting({
+    assert.equal(await repository.updateExisting({
       ...record,
       closed_at: '2026-10-14T10:00:00.000Z',
       work_order_sla_date: '2026-10-14T09:30:00.000Z',
       work_order_sla_outcome: 'late',
     }), true);
 
-    const [updated] = repository.listClosedBetween('2026-10-14T00:00:00.000Z', '2026-10-15T00:00:00.000Z');
+    const [updated] = await repository.listClosedBetween('2026-10-14T00:00:00.000Z', '2026-10-15T00:00:00.000Z');
     assert.equal(updated.closed_at, '2026-10-14T10:00:00.000Z');
     assert.equal(updated.work_order_sla_date, '2026-10-14T09:30:00.000Z');
     assert.equal(updated.work_order_sla_outcome, 'late');
-    assert.equal(repository.count(), 1);
+    assert.equal(await repository.count(), 1);
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
-test('closed-ticket repository exports full records within the date range and store', () => {
-  const repository = createClosedTicketRepository(':memory:');
+test('closed-ticket repository exports full records within the date range and store', async () => {
+  const repository = await createClosedTicketRepository(':memory:');
   try {
-    repository.insert(record);
-    repository.insert({
+    await repository.insert(record);
+    await repository.insert({
       ...record,
       order_id: 'next-day',
       closed_at: '2026-10-15T00:00:00.000Z',
     });
-    repository.insert({ ...record, store_id: 'komotini' });
+    await repository.insert({ ...record, store_id: 'komotini' });
 
-    const exported = repository.exportClosedBetween(
+    const exported = await repository.exportClosedBetween(
       '2026-10-14T00:00:00.000Z',
       '2026-10-15T00:00:00.000Z',
     );
@@ -91,29 +91,29 @@ test('closed-ticket repository exports full records within the date range and st
     assert.equal(exported[0].phone, record.phone);
     assert.equal(exported[0].imported_at, record.imported_at);
   } finally {
-    repository.close();
+    await repository.close();
   }
 });
 
-test('store-scoped repositories allow matching order IDs in separate stores', () => {
-  const alexandroupoli = createClosedTicketRepository(':memory:', 'alexandroupoli');
-  const komotini = createClosedTicketRepository(':memory:', 'komotini');
+test('store-scoped repositories allow matching order IDs in separate stores', async () => {
+  const alexandroupoli = await createClosedTicketRepository(':memory:', 'alexandroupoli');
+  const komotini = await createClosedTicketRepository(':memory:', 'komotini');
   try {
-    assert.equal(alexandroupoli.insert(record), true);
-    assert.equal(komotini.insert(record), true);
-    assert.equal(alexandroupoli.hasOrder('123'), true);
-    assert.equal(komotini.hasOrder('123'), true);
-    assert.equal(alexandroupoli.count(), 1);
-    assert.equal(komotini.count(), 1);
-    assert.equal(alexandroupoli.getByOrderId('123').store_id, 'alexandroupoli');
-    assert.equal(komotini.getByOrderId('123').store_id, 'komotini');
+    assert.equal(await alexandroupoli.insert(record), true);
+    assert.equal(await komotini.insert(record), true);
+    assert.equal(await alexandroupoli.hasOrder('123'), true);
+    assert.equal(await komotini.hasOrder('123'), true);
+    assert.equal(await alexandroupoli.count(), 1);
+    assert.equal(await komotini.count(), 1);
+    assert.equal((await alexandroupoli.getByOrderId('123')).store_id, 'alexandroupoli');
+    assert.equal((await komotini.getByOrderId('123')).store_id, 'komotini');
   } finally {
-    alexandroupoli.close();
-    komotini.close();
+    await alexandroupoli.close();
+    await komotini.close();
   }
 });
 
-test('migrates existing database records and pending closures to Alexandroupoli', () => {
+test('migrates existing database records and pending closures to Alexandroupoli', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'fiona-store-migration-'));
   const dbPath = path.join(directory, 'legacy.sqlite');
   const database = new Database(dbPath);
@@ -149,18 +149,18 @@ test('migrates existing database records and pending closures to Alexandroupoli'
   );
   database.close();
 
-  const repository = createClosedTicketRepository(dbPath, null);
-  const observations = createTicketObservationRepository(dbPath, null);
+  const repository = await createClosedTicketRepository(dbPath, null);
+  const observations = await createTicketObservationRepository(dbPath, null);
   try {
     assert.equal(fs.existsSync(`${dbPath}.pre-store-migration.bak`), true);
-    assert.equal(repository.getByOrderId('legacy-1').store_id, 'alexandroupoli');
-    assert.equal(repository.listPending()[0].store_id, 'alexandroupoli');
-    assert.equal(observations.firstCall('legacy-1', 'alexandroupoli').outcome, 'late');
-    assert.equal(repository.insert({ ...record, order_id: 'legacy-1', store_id: 'komotini' }), true);
-    assert.equal(repository.getByOrderId('legacy-1', 'komotini').store_id, 'komotini');
+    assert.equal((await repository.getByOrderId('legacy-1')).store_id, 'alexandroupoli');
+    assert.equal((await repository.listPending())[0].store_id, 'alexandroupoli');
+    assert.equal((await observations.firstCall('legacy-1', 'alexandroupoli')).outcome, 'late');
+    assert.equal(await repository.insert({ ...record, order_id: 'legacy-1', store_id: 'komotini' }), true);
+    assert.equal((await repository.getByOrderId('legacy-1', 'komotini')).store_id, 'komotini');
   } finally {
-    repository.close();
-    observations.close();
+    await repository.close();
+    await observations.close();
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
