@@ -2,9 +2,11 @@ import dotenv from 'dotenv';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-dotenv.config();
-
 const backendDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+
+// Plesk starts the app from the repository root, so backend/.env must be loaded explicitly.
+dotenv.config({ path: path.join(backendDirectory, '.env') });
+dotenv.config();
 
 const parseList = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 
