@@ -101,7 +101,7 @@ test('fetchOrders attaches the newest comment and external site details', async 
           data: {
             OrderComments: [
               { commentText: 'older', insertTime: '2026-09-30 10:00:00', dateSort: '20260930100000' },
-              { commentText: 'newest', insertTime: '2026-09-30 20:09:45', dateSort: '20260930200945', firstName: 'Stavros', lastName: 'Venetis' },
+              { commentText: 'newest', insertTime: '2026-09-30 20:09:45', dateSort: '20260930200945', firstName: 'Test', lastName: 'Technician' },
             ],
           },
         };
@@ -132,7 +132,7 @@ test('fetchOrders attaches the newest comment and external site details', async 
 
   const order = (await client.fetchOrders()).FilteredOrders[0];
 
-  assert.deepEqual(order.latestComment, { text: 'newest', insertTime: '2026-09-30 20:09:45', author: 'Stavros Venetis' });
+  assert.deepEqual(order.latestComment, { text: 'newest', insertTime: '2026-09-30 20:09:45', author: 'Test Technician' });
   assert.equal(order.externalData.escalateLimit, 'FB(+00).1 - 02');
   assert.equal(order.externalData.cliNumber, '2100000000');
   assert.equal(order.externalData.problemDescription, 'Loss of connectivity');
@@ -333,4 +333,59 @@ test('session wrappers preserve parsed SLA details and comment results', async (
   assert.equal(sla.slaSurpassed, 'N');
   assert.equal(sla.workOrderStatus, 'Closed');
   assert.equal(comment.text, 'Completed successfully');
+});
+test('fetchOrders logs in again when an expired session is rejected with 403', async () => {
+  let loginCount = 0;
+  const filterTokens = [];
+  const httpClient = {
+    post: async (url, payload) => {
+      if (url.endsWith('/auth/login')) {
+        loginCount += 1;
+        return { data: { sessionToken: `session-${loginCount}` } };
+      }
+      filterTokens.push(payload.sessionTokenID);
+      if (filterTokens.length === 1) {
+        const error = new Error('Forbidden');
+        error.response = { status: 403 };
+        throw error;
+      }
+      return { data: { FilteredOrders: [] } };
+    },
+  };
+  const client = new FionaClient(clientConfig, httpClient);
+
+  await client.fetchOrders();
+
+  assert.equal(loginCount, 2);
+  assert.deepEqual(filterTokens, ['session-1', 'session-2']);
+});
+
+test('session requests log in again after a 403 and expired cache entries are removed', async () => {
+  let loginCount = 0;
+  let detailCalls = 0;
+  const httpClient = {
+    post: async () => {
+      loginCount += 1;
+      return { data: { sessionToken: `session-${loginCount}` } };
+    },
+    get: async () => {
+      detailCalls += 1;
+      if (detailCalls === 1) {
+        const error = new Error('Forbidden');
+        error.response = { status: 403 };
+        throw error;
+      }
+      return { data: { orderId: 'A-1' } };
+    },
+  };
+  const client = new FionaClient(clientConfig, httpClient);
+
+  assert.deepEqual(await client.orderDetails('A-1'), { orderId: 'A-1' });
+  assert.equal(loginCount, 2);
+
+  client.commentCache.set('old', { comment: null, fetchedAt: Date.now() - 10 * 60 * 1000 });
+  client.workOrderSlaCache.set('old', { details: null, fetchedAt: Date.now() - 2 * 60 * 60 * 1000 });
+  await client.enrichOrders({ FilteredOrders: [] }, 'session-2');
+  assert.equal(client.commentCache.has('old'), false);
+  assert.equal(client.workOrderSlaCache.has('old'), false);
 });

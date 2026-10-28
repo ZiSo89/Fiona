@@ -181,7 +181,7 @@ test('carries site info, duration, next action and the latest comment', () => {
       orderTypeDuration: '30',
       nextActionDate: '2026-10-14 09:00:00',
       externalData: { escalateLimit: 'FB(+00).1 - 02', floor: '01', buildingId: null, apartment: '1' },
-      latestComment: { text: 'να καλέσουμε από Παρασκευή', insertTime: '2026-09-30 20:09:45.616019', author: 'Stavros Venetis' },
+      latestComment: { text: 'να καλέσουμε από Παρασκευή', insertTime: '2026-09-30 20:09:45.616019', author: 'Test Technician' },
     }],
   }).tickets[0];
 

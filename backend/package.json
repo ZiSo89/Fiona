@@ -11,17 +11,22 @@
     "sync:closed": "node src/cli/syncClosedTickets.js",
     "db:export": "node src/cli/migrateDatabase.js export",
     "db:import": "node src/cli/migrateDatabase.js import",
-    "test:mysql": "node --test test/mysql.integration.test.js"
+    "test:mysql": "node --test test/mysql.integration.test.js",
+    "lint": "eslint ."
   },
   "dependencies": {
     "axios": "^1.7.7",
-    "cors": "^2.8.5",
     "dotenv": "^16.4.1",
     "express": "^4.19.2",
-    "fiona-mobile-ops": "file:..",
+    "helmet": "^8.3.0",
     "mysql2": "^3.15.3"
   },
   "optionalDependencies": {
     "better-sqlite3": "^11.7.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0"
   }
 }

@@ -24,6 +24,14 @@ export const formatSiteNumber = (value) => {
 
 export const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
+// Recent data needs no age label; older data says how old it is so "Live" is not misleading.
+export const formatDataAge = (dateValue, now) => {
+  const ageMs = now - new Date(dateValue).getTime();
+  if (!dateValue || Number.isNaN(ageMs) || ageMs < 2 * 60 * 1000) return null;
+  const minutes = Math.floor(ageMs / 60000);
+  return minutes < 60 ? `πριν ${minutes} λεπ.` : `πριν ${Math.floor(minutes / 60)} ώρ.`;
+};
+
 export const athensDay = (value) => new Date(value).toLocaleDateString('en-CA', { timeZone: 'Europe/Athens' });
 
 export const formatTimer = (ms) => {

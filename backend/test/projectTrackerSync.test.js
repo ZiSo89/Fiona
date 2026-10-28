@@ -87,7 +87,7 @@ test('corrects a previously imported group name to the assigned team name', asyn
       async dailyWorkorders() {
         return [{
           orderId: 'fiona-grouped',
-          teamName: 'Kostas Tektonidis',
+          teamName: 'Assigned Crew',
           teamGroupName: 'NEW TECHNOLOGIES LTD KOMOTINI',
         }];
       },
@@ -113,7 +113,7 @@ test('corrects a previously imported group name to the assigned team name', asyn
     });
 
     assert.equal(summary.teamUpdated, 1);
-    assert.equal((await repository.getJob('alexandroupoli', 'fiona-grouped')).teamName, 'Kostas Tektonidis');
+    assert.equal((await repository.getJob('alexandroupoli', 'fiona-grouped')).teamName, 'Assigned Crew');
   });
 });
 
@@ -392,5 +392,44 @@ test('5.8.5 scores 15 without either routing phrase; 5.10 stays at 50', async ()
     assert.equal((await repository.getJob('alexandroupoli', 'visit-ok')).points, 50);
     assert.equal((await repository.getJob('alexandroupoli', 'existing-visit-ok')).points, 50);
     assert.deepEqual(imported, ['no-routing', 'reverse-routing', 'installation-only']);
+  });
+});
+test('does not request details again for recently skipped orders until their skip expires', async () => {
+  await withRepository(async (repository) => {
+    await repository.ensureCutoverAt(new Date('2026-10-18T12:00:00.000Z'));
+    const detailCalls = [];
+    const details = {
+      open: { orderStatus: 'OPEN', serviceGroup: 'ALEXANDROUPOLI' },
+      other: { orderStatus: 'COMPLETED', workOrderFinishedOnPremiseTime: '2026-10-18T13:00:00.000Z', serviceGroup: 'KOMOTINI' },
+    };
+    const client = {
+      async dailyWorkorders() { return [{ orderId: 'open', teamName: 'Team One' }, { orderId: 'other', teamName: 'Team One' }]; },
+      async orderDetails(orderId) {
+        detailCalls.push(orderId);
+        return details[orderId];
+      },
+    };
+    let currentTime = new Date('2026-10-18T14:00:00.000Z');
+    const skipCache = new Map();
+    const options = {
+      stores: [store],
+      clients: new Map([['alexandroupoli', client]]),
+      repository,
+      lookbackDays: 1,
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      wait: async () => {},
+      now: () => currentTime,
+      skipCache,
+    };
+
+    await syncProjectTracker(options);
+    const cached = await syncProjectTracker(options);
+    assert.equal(cached.skippedRecently, 2);
+    assert.deepEqual(detailCalls, ['open', 'other']);
+
+    currentTime = new Date('2026-10-18T15:30:00.000Z');
+    await syncProjectTracker(options);
+    assert.deepEqual(detailCalls, ['open', 'other', 'open']);
   });
 });

@@ -5,19 +5,36 @@ import {
   refreshTickets,
 } from '../services/pollingService.js';
 
+const FIRST_LOAD_WAIT_MS = 10 * 1000;
+const hasNoResult = (snapshot) => snapshot.status === 'idle' || snapshot.status === 'polling';
+
+// Only the very first poll is awaited, and never longer than the timeout; later polls run in the background.
+async function waitForFirstResult(refresh, waitMs = FIRST_LOAD_WAIT_MS) {
+  let timer;
+  const timeout = new Promise((resolve) => { timer = setTimeout(resolve, waitMs); });
+  try {
+    await Promise.race([refresh().catch(() => {}), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function listTickets(req, res) {
   try {
     const storeId = String(req.query.store || 'alexandroupoli');
     let snapshots;
     if (storeId === 'all') {
       snapshots = getAllLatestSnapshots();
-      if (snapshots.some((snapshot) => snapshot.status === 'idle' || snapshot.status === 'polling')) {
-        await refreshAllTickets();
+      if (snapshots.some(hasNoResult)) {
+        await waitForFirstResult(refreshAllTickets);
         snapshots = getAllLatestSnapshots();
       }
     } else {
       let snapshot = getLatestSnapshot(storeId);
-      if (snapshot.status === 'idle' || snapshot.status === 'polling') snapshot = await refreshTickets(storeId);
+      if (hasNoResult(snapshot)) {
+        await waitForFirstResult(() => refreshTickets(storeId));
+        snapshot = getLatestSnapshot(storeId);
+      }
       snapshots = [snapshot];
     }
 
@@ -37,6 +54,7 @@ export async function listTickets(req, res) {
         status,
         lastUpdatedAt,
         totalTickets: tickets.length,
+        possiblyTruncated: snapshots.some((snapshot) => snapshot.possiblyTruncated),
         tickets,
         stores: snapshots,
         error: snapshots.filter((snapshot) => snapshot.error).map(({ storeId: id, storeName, error }) => ({ storeId: id, storeName, error })),

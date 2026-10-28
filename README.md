@@ -12,7 +12,7 @@ Mobile-first εφαρμογή PWA για την καθημερινή διαχε�
 4. Το κουμπί ανανέωσης ζητά άμεσα τα νεότερα δεδομένα. Η λίστα ανανεώνεται αυτόματα περίπου κάθε λεπτό.
 5. Στο φίλτρο `COMPLETE` άνοιξε τα «Ολοκληρωμένα» ή τα «Στατιστικά». Επίλεξε μήνα και πάτησε μια εργασία για τα πλήρη στοιχεία και τις διαθέσιμες ενέργειες αντιγραφής.
 
-Η ένδειξη `Live` σημαίνει ότι ο server έχει πρόσφατα δεδομένα από τη Fiona. Οι ενδείξεις `Stale` ή `Offline / Cached` σημαίνουν ότι μπορεί να βλέπεις παλαιότερα δεδομένα. Η offline cache εισιτηρίων αποθηκεύεται τοπικά στη συσκευή για έως 24 ώρες από τον τελευταίο επιτυχημένο συγχρονισμό και διαγράφεται στην αποσύνδεση ή όταν δεν είναι έγκυρη η συνεδρία. Περίμενε επιτυχημένο συγχρονισμό ή επιβεβαίωσε την κατάσταση στη Fiona πριν ενεργήσεις.
+Η ένδειξη `Live` σημαίνει ότι ο server έχει πρόσφατα δεδομένα από τη Fiona. Οι ενδείξεις `Stale` ή `Offline / Cached` σημαίνουν ότι μπορεί να βλέπεις παλαιότερα δεδομένα. Η offline cache εισιτηρίων αποθηκεύεται τοπικά στη συσκευή για έως 24 ώρες από τον τελευταίο επιτυχημένο συγχρονισμό και διαγράφεται στην αποσύνδεση ή όταν δεν είναι έγκυρη η συνεδρία. Όταν τα δεδομένα είναι παλαιότερα από δύο λεπτά, δίπλα στην ώρα εμφανίζεται η ηλικία τους (π.χ. «πριν 5 λεπ.»). Αν ο server δεν κάνει επιτυχημένο polling για δύο διαστήματα στη σειρά, το `Live` γίνεται `Stale`. Αν ένα κατάστημα φτάσει το `FIONA_FILTER_LIMIT`, εμφανίζεται προειδοποίηση ότι μπορεί να λείπουν εισιτήρια. Περίμενε επιτυχημένο συγχρονισμό ή επιβεβαίωσε την κατάσταση στη Fiona πριν ενεργήσεις.
 
 ## Fiona Team Points
 
@@ -46,7 +46,7 @@ Mobile-first εφαρμογή PWA για την καθημερινή διαχε�
 
 5. Περίμενε να περάσουν οι έλεγχοι CI, έλεγξε το diff και κάνε merge από το GitHub. Διέγραψε το προσωρινό branch μετά το merge.
 
-Το CI εκτελεί τα backend tests και τα builds του frontend και του tracker σε Pull Requests προς `main`. Το `development` δεν χρειάζεται ως μόνιμο branch για την τρέχουσα ροή· πρόσθεσέ το μόνο αν χρειάζεσαι ξεχωριστή staging έκδοση ή ομαδοποιημένες releases.
+Το CI εκτελεί ESLint, τα backend και frontend tests, τα builds του frontend και του tracker, τα MariaDB integration tests και τα tracker e2e tests σε Pull Requests προς `main`. Το `development` δεν χρειάζεται ως μόνιμο branch για την τρέχουσα ροή· πρόσθεσέ το μόνο αν χρειάζεσαι ξεχωριστή staging έκδοση ή ομαδοποιημένες releases.
 
 Για προστασία του `main`, ενεργοποίησε στο GitHub ruleset ή branch protection: απαίτηση Pull Request, απαίτηση επιτυχίας των `Backend tests`, `Frontend build` και `Tracker build`, απαγόρευση force push και διαγραφής branch. Αυτές οι ρυθμίσεις γίνονται χειροκίνητα στο GitHub και δεν ενεργοποιούνται από το workflow.
 
@@ -74,8 +74,16 @@ frontend/src/
   shared/          βοηθητικές συναρτήσεις χωρίς εξάρτηση από feature
   features/
     auth/            AuthGate
-    tickets/         κάρτα εισιτηρίου, μοντέλο/SLA, formatters, τοπική αποθήκευση, demo δεδομένα
-    closed-tickets/  προβολή ολοκληρωμένων και στατιστικών
+    tickets/         κάρτα εισιτηρίου, μοντέλο/SLA, formatters, τοπική αποθήκευση, demo δεδομένα (μόνο σε development)
+    closed-tickets/  CompleteView (σύνθεση), ClosedTicketList, ClosedTicketStats, closedTicketFormat
+```
+
+```text
+project-tracker/src/
+  main.jsx, App.jsx, styles.css
+  categories.js        κατάλογος κατηγοριών και πόντων της διεπαφής
+  trackerModel.js      ημερομηνίες Αθήνας, drafts διορθώσεων, ετικέτες και API helper
+  components/          CategoryPicker
 ```
 
 Νέο endpoint: πρόσθεσε controller στο `controllers/`, route στο `routes/` και σύνδεσέ το στο `app.js`. Νέα λειτουργία διεπαφής: δημιούργησε φάκελο στο `frontend/src/features/`.
@@ -86,8 +94,11 @@ frontend/src/
 - `project-tracker/`: ξεχωριστό React/Vite PWA στο `/tracker/`, με δικό του manifest και service worker scope. Χρησιμοποιεί μόνο τα περιορισμένα `/api/tracker/*` endpoints.
 - `backend/`: Node.js ES modules και Express. Κάθε ρυθμισμένο κατάστημα έχει ξεχωριστό Fiona client, session token και polling snapshot. Ο normalizer μετατρέπει κάθε απάντηση στο contract της διεπαφής και προσθέτει την ταυτότητα καταστήματος.
 - Οι πίνακες `project_tracker_*` αποθηκεύουν order ID, κατάστημα, συνεργείο, κατηγορία, ώρα ολοκλήρωσης, πόντους/overrides, audit log και κλειδώματα πληρωμής ανά μήνα/συνεργείο. Χρησιμοποιούν την ίδια βάση με τα closed tickets.
-- Ο Express server σερβίρει το frontend και το API από την ίδια θύρα. Η προεπιλεγμένη θύρα είναι `4000` και αλλάζει με το `PORT`.
-- Το backend κρατά το πιο πρόσφατο snapshot στη μνήμη, χωριστά ανά κατάστημα. Το `POLL_INTERVAL_MS` ρυθμίζει το διάστημα polling: το `.env.example` ορίζει `300000` ms, ενώ ο fallback του κώδικα είναι `120000` ms. Η διεπαφή ζητά νέο snapshot περίπου κάθε 60 δευτερόλεπτα.
+- Ο Express server σερβίρει το frontend και το API από την ίδια θύρα. Η προεπιλεγμένη θύρα είναι `4000` και αλλάζει με το `PORT`. Επειδή όλα είναι στο ίδιο origin, δεν στέλνονται CORS headers. Το `helmet` προσθέτει security headers και Content-Security-Policy, που επιτρέπει μόνο πόρους του ίδιου origin και τα Google Fonts του tracker.
+- Σε `SIGTERM`/`SIGINT` ο server σταματά το polling και το tracker sync, κλείνει τις συνδέσεις HTTP, περιμένει έως 10 δευτερόλεπτα να ολοκληρωθούν οι τρέχουσες εργασίες και κλείνει τη βάση.
+- Το `/api/health` είναι δημόσιο και επιστρέφει την κατάσταση κάθε καταστήματος και του τελευταίου tracker sync. Επιστρέφει HTTP 503 όταν κάποιο κατάστημα είναι σε κατάσταση `error`, ώστε να μπορεί να χρησιμοποιηθεί από εξωτερικό monitoring.
+- Το backend κρατά το πιο πρόσφατο snapshot στη μνήμη, χωριστά ανά κατάστημα. Το `POLL_INTERVAL_MS` ρυθμίζει το διάστημα polling: το `.env.example` ορίζει `300000` ms, ενώ ο fallback του κώδικα είναι `120000` ms. Η διεπαφή ζητά νέο snapshot περίπου κάθε 60 δευτερόλεπτα. Το `/api/tickets` περιμένει μόνο το πρώτο poll μετά την εκκίνηση και για έως 10 δευτερόλεπτα· στη συνέχεια επιστρέφει αμέσως το τελευταίο snapshot, ενώ η ανανέωση συνεχίζεται στο παρασκήνιο. Όταν η Fiona απορρίψει ληγμένο session με 401 ή 403, ο client συνδέεται ξανά μία φορά.
+- Το tracker sync θυμάται στη μνήμη τα orders που παρέλειψε, ώστε να μην τα ζητά ξανά σε κάθε κύκλο: τα μη ολοκληρωμένα για 1 ώρα, όσα ανήκουν σε άλλο κατάστημα για 24 ώρες και όσα έκλεισαν πριν από το cutover για 14 ημέρες.
 - Η SQLite βάση βρίσκεται από προεπιλογή στο `backend/data/closed-tickets.sqlite`. Οι πίνακες ολοκληρωμένων, εκκρεμών και παρατηρήσεων περιλαμβάνουν `store_id`, ώστε όμοια Fiona order IDs από διαφορετικά καταστήματα να μην συγκρούονται. Πριν από την πρώτη migration δημιουργείται δίπλα στη βάση το `closed-tickets.sqlite.pre-store-migration.bak` και οι παλιές εγγραφές μεταφέρονται στο `alexandroupoli`.
 - Το `DB_CLIENT=sqlite` είναι η προεπιλογή. Με `DB_CLIENT=mysql` χρησιμοποιείται MySQL/MariaDB μέσω `mysql2`, χωρίς native compilation. Η SQLite εξάρτηση `better-sqlite3` είναι προαιρετική για την εγκατάσταση, αλλά απαιτείται για SQLite λειτουργία, tests και τοπικό export. Αποτυχία σύνδεσης MySQL δεν προκαλεί fallback σε SQLite. Όλα τα repository factories και οι λειτουργίες τους επιστρέφουν promises και πρέπει να γίνονται `await`.
 - Σε εντελώς κενό snapshot απαιτούνται δύο διαδοχικά επιτυχημένα polls, ώστε να αποκλειστεί προσωρινά κενή απάντηση. Το CLI `sync:closed` προορίζεται για ιστορική αναπλήρωση tickets που δεν είχαν καταγραφεί ως ανοιχτά πριν από shutdown.
@@ -103,7 +114,7 @@ npm install --prefix frontend
 npm install --prefix project-tracker
 ```
 
-Δημιούργησε το `backend/.env` από το `backend/.env.example` και συμπλήρωσε το `FIONA_USERNAME` για Αλεξανδρούπολη, τα `FIONA_KOMOTINI_USERNAME` και `FIONA_ORESTIADA_USERNAME` για τα άλλα καταστήματα, καθώς και το κοινό `FIONA_PASSWORD`. Για διαφορετικό Basic Auth ανά λογαριασμό, χρησιμοποίησε τα αντίστοιχα `FIONA_<STORE>_BASIC_AUTH`; αλλιώς χρησιμοποιείται το κοινό `FIONA_BASIC_AUTH`. Επιβεβαίωσε με τη Fiona ποια ρύθμιση ισχύει για τους λογαριασμούς σου. Όρισε ξεχωριστό, ισχυρό `APP_PASSWORD`. Για διορθώσεις στο tracker, όρισε και το `PROJECT_TRACKER_SESSION_SECRET` και το `PROJECT_TRACKER_TEAM_PASSWORDS` ως JSON αντικείμενο με κλειδιά της μορφής `storeId|ακριβές teamName`. Για τον διαχειριστή του tracker, όρισε ξεχωριστό, ισχυρό `PROJECT_TRACKER_ADMIN_PASSWORD`. Το `.env` περιέχει μυστικά και δεν πρέπει να κοινοποιείται.
+Δημιούργησε το `backend/.env` από το `backend/.env.example` και συμπλήρωσε το `FIONA_USERNAME` για Αλεξανδρούπολη, τα `FIONA_KOMOTINI_USERNAME` και `FIONA_ORESTIADA_USERNAME` για τα άλλα καταστήματα, καθώς και το κοινό `FIONA_PASSWORD`. Για διαφορετικό Basic Auth ανά λογαριασμό, χρησιμοποίησε τα αντίστοιχα `FIONA_<STORE>_BASIC_AUTH`; αλλιώς χρησιμοποιείται το κοινό `FIONA_BASIC_AUTH`. Επιβεβαίωσε με τη Fiona ποια ρύθμιση ισχύει για τους λογαριασμούς σου. Όρισε ξεχωριστό, ισχυρό `APP_PASSWORD`. Για διορθώσεις στο tracker, όρισε και το `PROJECT_TRACKER_SESSION_SECRET` και το `PROJECT_TRACKER_TEAM_PASSWORDS` ως JSON αντικείμενο με ένα κλειδί ανά συνεργείο, της μορφής `storeId|ακριβές teamName`, π.χ. `{"alexandroupoli|Team A":"…","komotini|Team B":"…"}`. Αν το JSON δεν είναι έγκυρο, ο server γράφει προειδοποίηση και το αγνοεί. Αν λείπει το `PROJECT_TRACKER_SESSION_SECRET`, χρησιμοποιείται το `APP_PASSWORD` και ο server γράφει προειδοποίηση στην εκκίνηση. Για τον διαχειριστή του tracker, όρισε ξεχωριστό, ισχυρό `PROJECT_TRACKER_ADMIN_PASSWORD`. Το `.env` περιέχει μυστικά και δεν πρέπει να κοινοποιείται.
 
 Για production-like εκτέλεση, κάνε build και ξεκίνησε τον backend:
 
@@ -123,12 +134,21 @@ npm run dev:frontend
 npm run dev:tracker
 ```
 
-Το κύριο app είναι στο `http://localhost:5173/app/`. Το tracker development server είναι στο `http://localhost:5174/tracker/` και κάνει proxy τα API requests στο `http://localhost:4000` από προεπιλογή. Αν ο backend χρησιμοποιεί άλλη θύρα, όρισε `BACKEND_URL` πριν ξεκινήσεις το `dev:tracker`.
+Το κύριο app είναι στο `http://localhost:5173/app/`. Το tracker development server είναι στο `http://localhost:5174/tracker/` και κάνει proxy τα API requests στο `http://localhost:4000` από προεπιλογή. Και τα δύο development servers κάνουν proxy στο `http://localhost:4000`. Αν ο backend χρησιμοποιεί άλλη θύρα, όρισε `BACKEND_URL` πριν ξεκινήσεις το `dev:frontend` ή το `dev:tracker`. Τα demo εισιτήρια της Αλεξανδρούπολης εμφανίζονται μόνο στο development server όταν ο backend δεν είναι διαθέσιμος· το production build δεν τα περιέχει.
 
 Για τα tests του backend:
 
 ```powershell
 npm --prefix backend test
+```
+
+Για τα frontend tests και τον έλεγχο κώδικα (ESLint):
+
+```powershell
+npm --prefix frontend test
+npm --prefix backend run lint
+npm --prefix frontend run lint
+npm --prefix project-tracker run lint
 ```
 
 ### Deployment στο Plesk με MariaDB

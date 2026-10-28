@@ -26,6 +26,8 @@ jobs:
           cache-dependency-path: backend/package-lock.json
       - name: Install backend dependencies
         run: npm ci --prefix backend
+      - name: Lint backend
+        run: npm run lint --prefix backend
       - name: Run backend tests
         run: npm test --prefix backend
 
@@ -43,6 +45,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend dependencies
         run: npm ci --prefix frontend
+      - name: Lint frontend
+        run: npm run lint --prefix frontend
       - name: Run frontend tests
         run: npm test --prefix frontend
       - name: Build frontend
@@ -96,6 +100,8 @@ jobs:
           cache-dependency-path: project-tracker/package-lock.json
       - name: Install tracker dependencies
         run: npm ci --prefix project-tracker
+      - name: Lint tracker
+        run: npm run lint --prefix project-tracker
       - name: Build tracker
         run: npm run build --prefix project-tracker
 

@@ -14,6 +14,19 @@ function createRequestError(operation, error) {
   return requestError;
 }
 
+// Fiona answers an expired session token with 401 or 403, so both trigger one fresh login.
+const isSessionRejection = (error, operation) => error?.operation === operation
+  && (error.status === 401 || error.status === 403);
+
+const COMMENT_CACHE_MS = 5 * 60 * 1000;
+const SLA_CACHE_MS = 60 * 60 * 1000;
+
+function pruneCache(cache, maxAgeMs, now) {
+  for (const [key, entry] of cache) {
+    if (now - entry.fetchedAt >= maxAgeMs) cache.delete(key);
+  }
+}
+
 export class FionaClient {
   constructor(clientConfig = config, httpClient = null) {
     this.config = clientConfig;
@@ -137,7 +150,7 @@ export class FionaClient {
     try {
       return await requestWithRetry(sessionToken);
     } catch (error) {
-      if (error?.operation !== operation || error.status !== 401) throw error;
+      if (!isSessionRejection(error, operation)) throw error;
       this.sessionToken = null;
       sessionToken = await this.login();
       return requestWithRetry(sessionToken);
@@ -296,13 +309,14 @@ export class FionaClient {
   async enrichLatestComments(payload, sessionToken) {
     const pending = [];
     const now = Date.now();
+    pruneCache(this.commentCache, COMMENT_CACHE_MS, now);
 
     for (const order of this.getWorkOrders(payload)) {
       const orderId = order?.id ?? order?.orderId;
       if (!orderId) continue;
 
       const cached = this.commentCache.get(orderId);
-      if (cached && now - cached.fetchedAt < 5 * 60 * 1000) {
+      if (cached) {
         order.latestComment = cached.comment;
         continue;
       }
@@ -331,13 +345,14 @@ export class FionaClient {
     const orders = this.getWorkOrders(payload);
     const pending = [];
     const now = Date.now();
+    pruneCache(this.workOrderSlaCache, SLA_CACHE_MS, now);
 
     for (const order of orders) {
       const serviceOrderId = order?.serviceOrderId || order?.orderId || order?.id;
       if (!serviceOrderId) continue;
 
       const cached = this.workOrderSlaCache.get(serviceOrderId);
-      if (cached && now - cached.fetchedAt < 60 * 60 * 1000) {
+      if (cached) {
         this.applyExternalDetails(order, cached.details);
         continue;
       }
@@ -365,18 +380,12 @@ export class FionaClient {
       const payload = await this.requestOrders(sessionToken);
       return await this.enrichOrders(payload, sessionToken);
     } catch (error) {
-      if (error?.operation !== 'orders/filter' || error.status !== 401) throw error;
+      if (!isSessionRejection(error, 'orders/filter')) throw error;
 
       this.sessionToken = null;
       const refreshedToken = await this.login();
-      try {
-        const payload = await this.requestOrders(refreshedToken);
-        return await this.enrichOrders(payload, refreshedToken);
-      } catch (retryError) {
-        throw retryError;
-      }
+      const payload = await this.requestOrders(refreshedToken);
+      return this.enrichOrders(payload, refreshedToken);
     }
   }
 }
-
-export const fionaClient = new FionaClient();

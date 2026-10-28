@@ -6,15 +6,8 @@ import {
   Check,
   ArrowDownUp,
   CircleAlert,
-  Cable,
   Cloud,
   Copy,
-  Package,
-  Router,
-  Satellite,
-  Wifi,
-  Wrench,
-  Zap,
   LoaderCircle,
   LockKeyhole,
   LogOut,
@@ -29,300 +22,26 @@ import {
   Trophy,
   X,
 } from 'lucide-react';
-
-const categoryGroups = [
-  { id: 'installation', label: 'Εγκαταστάσεις' },
-  { id: 'impairment', label: 'Βλάβες' },
-  { id: 'other', label: 'Άλλες εργασίες' },
-];
-
-// selectable: false keeps the category displayable for existing jobs without offering it in the picker.
-const categories = [
-  { id: 'ftth_installation', label: 'Εγκατάσταση Οπτικής', source: 'FTTH Activation', points: 50, group: 'installation', Icon: Zap },
-  { id: 'fwa_installation', label: 'Εγκατάσταση 5G', source: 'CPE Installation FWA', points: 35, group: 'installation', Icon: Wifi },
-  { id: 'dth_tv_installation', label: 'Εγκατάσταση Δορυφορικής', source: 'CPE Installation DTH TV', points: 25, group: 'installation', Icon: Satellite },
-  { id: 'canceled_eon_installation', label: 'Εγκατάσταση EON', source: 'CPE Installation', points: 5, group: 'installation', Icon: Router },
-  { id: 'ftth_impairment', label: 'Βλάβη Οπτικής', source: 'On-Site Support FTTH', points: 15, group: 'impairment', Icon: Wrench },
-  { id: 'fwa_impairment', label: 'Βλάβη 5G', source: 'On-Site Support FWA', points: 15, group: 'impairment', Icon: Wrench },
-  { id: 'dth_tv_impairment', label: 'Βλάβη Δορυφορικής', source: 'On-Site Support DTH TV', points: 18, group: 'impairment', Icon: Wrench },
-  { id: 'copper_installation', label: 'Εγκατάσταση χαλκού', source: 'NGA Activation, CPE Installation NGA / LLU', points: 15, group: 'installation', Icon: Router },
-  { id: 'copper_impairment', label: 'Βλάβη χαλκού', source: 'On-Site Support NGA / LLU, SI Bridging, CO Visit', points: 15, group: 'impairment', Icon: Wrench },
-  { id: 'combined_work', label: 'Συνδιαστικό', source: 'Combined Wind-AP / OTE-WIND', points: 15, group: 'other', Icon: Package },
-  { id: 'other_works', label: 'Άλλες εργασίες', source: 'Λοιπές εργασίες', points: 5, group: 'other', Icon: Package },
-  { id: 'cabling_repair', label: 'Καλωδίωση / νέα εγκατάσταση', source: 'Cabling repair and maintenance', points: 15, group: 'other', Icon: Cable },
-  { id: 'double_team', label: 'Διπλό Συνεργείο', source: 'Μόνο χειροκίνητη επιλογή', points: 100, group: 'other', Icon: Copy },
-  { id: 'soho_installation_impairment', label: 'SOHO', source: 'SOHO Installation / Impairment', points: 20, group: 'other', Icon: Package, selectable: false },
-];
-
-function categoryLabel(categoryId, fallback) {
-  return categories.find((category) => category.id === categoryId)?.label || fallback || 'Χωρίς αντιστοίχιση';
-}
-
-// Explains why a job's points differ from its category's base points.
-function pointsNote(job) {
-  const base = categories.find((category) => category.id === job.categoryId)?.points;
-  if (!job.mapped || base === undefined || job.points === base) return '';
-  if (job.correctedAt) return `Πόντοι προσαρμοσμένοι χειροκίνητα (βασικοί ${base})`;
-  if (job.categoryId === 'cabling_repair' && job.points === 50) return 'Ολοκληρώθηκε εγκατάσταση ή όδευση';
-  return `${job.points} από ${base} πόντους, δεν έγινε η όδευση`;
-}
-
-function CategoryPicker({ value, current, pointsValue, onChange, onPointsChange }) {
-  return (
-    <div className="category-picker">
-      {categoryGroups.map((group) => {
-        const options = categories.filter((category) => category.group === group.id
-          && (category.selectable !== false || category.id === current));
-        if (!options.length) return null;
-        return (
-          <section className={`category-group group-${group.id}`} key={group.id}>
-            <h4>{group.label}</h4>
-            <div className="category-options">
-              {options.map(({ id, label, source, points, Icon }) => (
-                <div className="category-option-wrap" key={id}>
-                  <button
-                    type="button"
-                    className={`category-option${value === id ? ' is-selected' : ''}`}
-                    aria-pressed={value === id}
-                    onClick={() => onChange(id)}
-                  >
-                    <Icon size={16} />
-                    <span className="category-option-text">
-                      <strong>{label}</strong>
-                      <small>{source}</small>
-                    </span>
-                    <span className="category-option-points">{points}</span>
-                  </button>
-                  {value === id && ['ftth_installation', 'cabling_repair'].includes(id) && (
-                    <div className="category-point-choices" role="group" aria-label={`${label}: επιλογή πόντων`}>
-                      <span>Πόντοι:</span>
-                      {[15, 50].map((choice) => (
-                        <button
-                          type="button"
-                          className={`category-point-choice${pointsValue === choice ? ' is-selected' : ''}`}
-                          aria-pressed={pointsValue === choice}
-                          key={choice}
-                          onClick={() => onPointsChange(choice)}
-                        >
-                          {choice}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-        );
-      })}
-      <button
-        type="button"
-        className={`category-clear${value === '' ? ' is-selected' : ''}`}
-        aria-pressed={value === ''}
-        onClick={() => onChange('')}
-      >
-        Χωρίς αντιστοίχιση
-      </button>
-    </div>
-  );
-}
-
-const dayFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Europe/Athens',
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-const monthFormatter = new Intl.DateTimeFormat('en-CA', {
-  timeZone: 'Europe/Athens',
-  year: 'numeric',
-  month: '2-digit',
-});
-const visibleDateFormatter = new Intl.DateTimeFormat('el-GR', {
-  timeZone: 'Europe/Athens',
-  day: 'numeric',
-  month: 'long',
-  weekday: 'long',
-});
-const commentTimeFormatter = new Intl.DateTimeFormat('el-GR', {
-  timeZone: 'Europe/Athens',
-  dateStyle: 'short',
-  timeStyle: 'short',
-});
-
-function profileKey(profile) {
-  return `${profile.storeId}::${profile.teamName}`;
-}
-
-function jobKey(job) {
-  return `${job.storeId}::${job.orderId}`;
-}
-
-function applyJobDraft(job, draft) {
-  if (!draft) return job;
-  const categoryId = draft.categoryId || null;
-  const category = categories.find((entry) => entry.id === categoryId);
-  const pointsOverride = draft.pointsOverride === undefined ? job.pointsOverride : draft.pointsOverride;
-  return {
-    ...job,
-    categoryId,
-    categoryName: category?.label ?? null,
-    pointsOverride,
-    points: pointsOverride ?? category?.points ?? 0,
-    mapped: Boolean(category),
-  };
-}
-
-function updateMonthJob(monthData, previousJob, nextJob) {
-  if (!monthData || !previousJob || !nextJob) return monthData;
-  const previousCategoryId = previousJob.categoryId || null;
-  const nextCategoryId = nextJob.categoryId || null;
-  const categoriesById = new Map(monthData.categories.map((entry) => [entry.categoryId || 'unmapped', { ...entry }]));
-  const previousKey = previousCategoryId || 'unmapped';
-  const nextKey = nextCategoryId || 'unmapped';
-  if (previousKey === nextKey) {
-    const entry = categoriesById.get(previousKey);
-    if (entry) entry.points += nextJob.points - previousJob.points;
-  } else {
-    const previousEntry = categoriesById.get(previousKey);
-    if (previousEntry) {
-      previousEntry.jobCount -= 1;
-      previousEntry.points -= previousJob.points;
-      if (previousEntry.jobCount === 0) categoriesById.delete(previousKey);
-    }
-    const category = categories.find((entry) => entry.id === nextCategoryId);
-    const nextEntry = categoriesById.get(nextKey) || {
-      categoryId: nextCategoryId,
-      categoryName: category?.label ?? 'Χωρίς αντιστοίχιση',
-      jobCount: 0,
-      points: 0,
-      mapped: Boolean(category),
-    };
-    nextEntry.jobCount += 1;
-    nextEntry.points += nextJob.points;
-    categoriesById.set(nextKey, nextEntry);
-  }
-  const categoryOrder = new Map(categories.map((entry, index) => [entry.id, index]));
-  return {
-    ...monthData,
-    totalPoints: monthData.totalPoints + nextJob.points - previousJob.points,
-    categories: [...categoriesById.values()].sort((left, right) => (
-      (categoryOrder.get(left.categoryId) ?? Number.MAX_SAFE_INTEGER)
-      - (categoryOrder.get(right.categoryId) ?? Number.MAX_SAFE_INTEGER)
-    )),
-    days: monthData.days.map((day) => day.date === dayFormatter.format(new Date(previousJob.closedAt))
-      ? { ...day, points: day.points + nextJob.points - previousJob.points }
-      : day),
-  };
-}
-
-// Keeps the card in view after the picker collapses and the page height shrinks.
-function scrollToJob(key) {
-  requestAnimationFrame(() => requestAnimationFrame(() => {
-    const card = [...document.querySelectorAll('[data-job-key]')].find((node) => node.dataset.jobKey === key);
-    card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-  }));
-}
-
-function readTrackerView() {
-  try {
-    const saved = JSON.parse(localStorage.getItem('project-tracker-view') || '{}');
-    return {
-      profileKey: typeof saved.profileKey === 'string' ? saved.profileKey : '',
-      month: /^\d{4}-\d{2}$/.test(saved.month) ? saved.month : '',
-      date: /^\d{4}-\d{2}-\d{2}$/.test(saved.date) ? saved.date : '',
-    };
-  } catch {
-    return { profileKey: '', month: '', date: '' };
-  }
-}
-
-function currentAthensDate() {
-  const parts = Object.fromEntries(dayFormatter.formatToParts(new Date()).map((part) => [part.type, part.value]));
-  return `${parts.year}-${parts.month}-${parts.day}`;
-}
-
-function currentAthensMonth() {
-  return monthFormatter.format(new Date());
-}
-
-function getMonthTitle(month) {
-  const formatted = new Intl.DateTimeFormat('el-GR', {
-    timeZone: 'Europe/Athens',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(`${month}-01T12:00:00.000Z`));
-  return `${formatted.charAt(0).toLocaleUpperCase('el-GR')}${formatted.slice(1)}`;
-}
-
-function shiftMonth(month, amount) {
-  const [year, monthNumber] = month.split('-').map(Number);
-  return new Date(Date.UTC(year, monthNumber - 1 + amount, 1)).toISOString().slice(0, 7);
-}
-
-function calendarCells(month) {
-  const [year, monthNumber] = month.split('-').map(Number);
-  const firstDay = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();
-  const dayCount = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
-  const total = Math.ceil((firstDay + dayCount) / 7) * 7;
-  return Array.from({ length: total }, (_, index) => {
-    const day = index - firstDay + 1;
-    return day < 1 || day > dayCount ? null : `${month}-${String(day).padStart(2, '0')}`;
-  });
-}
-
-function formatDate(value) {
-  return visibleDateFormatter.format(new Date(`${value}T12:00:00.000Z`));
-}
-
-const greekServiceTypes = {
-  'ftth activation': 'Εγκατάσταση Οπτικής (FTTH)',
-  'on-site support ftth': 'Βλάβη Οπτικής (FTTH)',
-  'cpe installation fwa': 'Εγκατάσταση 5G (FWA)',
-  'on-site support fwa': 'Βλάβη 5G (FWA)',
-  'nga activation': 'Εγκατάσταση χαλκού',
-  'on-site support nga': 'Βλάβη χαλκού',
-  'on-site support llu': 'Βλάβη χαλκού',
-  'si bridging': 'Βλάβη χαλκού',
-  'cpe installation nga': 'Εγκατάσταση χαλκού',
-  'cpe installation llu': 'Εγκατάσταση χαλκού',
-  'cpe installation': 'Εγκατάσταση EON',
-  'cpe installation dth tv': 'Εγκατάσταση Δορυφορικής',
-  'on-site support dth tv': 'Βλάβη Δορυφορικής',
-  'combined wind-ap': 'Συνδιαστικό',
-  'combined visit ote-wind': 'Συνδιαστικό',
-  'combined llu visit ote-wind': 'Συνδιαστικό',
-  'co visit': 'Βλάβη χαλκού (CO Visit)',
-  'cabling repair and maintenance': 'Νέα εγκατάσταση / επισκευή καλωδίωσης',
-};
-
-function jobLabel(job) {
-  return job.fionaCategory || job.sourceLabel || job.categoryName || 'Αντιστοίχιση κατηγορίας';
-}
-
-function formatDateTime(value) {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? String(value) : commentTimeFormatter.format(date);
-}
-
-async function trackerRequest(path, options = {}) {
-  const response = await fetch(`/api/tracker${path}`, {
-    credentials: 'same-origin',
-    ...options,
-    headers: {
-      ...(options.body ? { 'content-type': 'application/json' } : {}),
-      ...options.headers,
-    },
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || `Request failed (${response.status})`);
-  return data;
-}
-
-function jobGreekLabel(job) {
-  const english = String(jobLabel(job)).trim().replace(/\s+/g, ' ').toLowerCase();
-  return greekServiceTypes[english] || (job.categoryId ? categoryLabel(job.categoryId) : '');
-}
+import CategoryPicker from './components/CategoryPicker.jsx';
+import { categories, categoryLabel, pointsNote } from './categories.js';
+import {
+  profileKey,
+  jobKey,
+  applyJobDraft,
+  updateMonthJob,
+  scrollToJob,
+  readTrackerView,
+  currentAthensDate,
+  currentAthensMonth,
+  getMonthTitle,
+  shiftMonth,
+  calendarCells,
+  formatDate,
+  jobLabel,
+  formatDateTime,
+  trackerRequest,
+  jobGreekLabel,
+} from './trackerModel.js';
 
 function App() {
   const today = currentAthensDate();
