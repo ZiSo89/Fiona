@@ -1,0 +1,42 @@
+name: Build Plesk deploy branch
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-plesk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build and publish deploy branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Plesk shared hosting cannot run npm (fork/memory limits), so everything is prebuilt here.
+      - name: Install backend production dependencies
+        run: npm ci --prefix backend --omit=dev --omit=optional
+
+      - name: Build frontend and tracker
+        run: npm run build:clients
+
+      - name: Publish to deploy branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan deploy-tmp
+          git rm -r -q --cached .
+          git add -A
+          git add -f frontend/dist project-tracker/dist backend/node_modules
+          git commit -q -m "Deploy build from ${GITHUB_SHA::7}"
+          git push -f origin HEAD:deploy
