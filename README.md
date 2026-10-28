@@ -130,6 +130,17 @@ npm run dev:tracker
 npm --prefix backend test
 ```
 
+### Deployment στο Render
+
+Δημιούργησε Node.js Web Service με κενό **Root Directory** (ρίζα του repository) και τις παρακάτω εντολές:
+
+- **Build Command:** `npm run build:render`
+- **Start Command:** `npm run start:backend`
+
+Το `build:render` εγκαθιστά τις κλειδωμένες εξαρτήσεις του backend, του frontend και του tracker με `npm ci` και έπειτα χτίζει και τις δύο διεπαφές. Για τα δύο Vite apps περιλαμβάνει ρητά τα `devDependencies`, ακόμη και με `NODE_ENV=production`. Το σκέτο `npm install` στη ρίζα δεν εγκαθιστά τις εξαρτήσεις των υποφακέλων· αν εγκατασταθεί μόνο το backend, το build αποτυγχάνει με `vite: not found`.
+
+Αντικατάστησε το παλιό Build Command στις ρυθμίσεις του υπάρχοντος Render service και κάνε νέο deploy αφού ανέβουν οι αλλαγές. Ρύθμισε τα μυστικά του backend ως environment variables στο Render, όχι ως αρχεία στο repository. Για μόνιμη αποθήκευση της SQLite, όρισε το `CLOSED_TICKETS_DB_PATH` σε διαδρομή πάνω σε persistent disk.
+
 ## Πρόσβαση μέσω Cloudflare Tunnel
 
 Το Tunnel εκθέτει την εφαρμογή του υπολογιστή μέσω HTTPS. Ο υπολογιστής, ο backend και το Tunnel πρέπει να παραμένουν σε λειτουργία και ο υπολογιστής να μην μπει σε αναστολή. Τα Quick Tunnels είναι προσωρινά και η διεύθυνση αλλάζει σε κάθε εκκίνηση· είναι κατάλληλα για demo, όχι για μόνιμη υπηρεσία.
