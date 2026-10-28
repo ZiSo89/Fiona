@@ -62,7 +62,7 @@ export function createAuth(password, now = () => Date.now()) {
     requireAuth(req, res, next) {
       if (OPEN_PATHS.has(req.path)) return next();
       if (!password) return res.status(503).json({ success: false, message: 'APP_PASSWORD is not configured' });
-      if (!isAuthenticated(req)) return res.status(401).json({ success: false, message: 'Login required' });
+      if (!isAuthenticated(req)) return res.status(401).json({ success: false, message: 'Χρειάζεται σύνδεση.' });
       return next();
     },
     login(req, res) {

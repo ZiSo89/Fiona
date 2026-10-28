@@ -150,7 +150,7 @@ a:focus-visible {
 .profile-select-wrap > span,
 .eyebrow {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -369,7 +369,7 @@ h1 {
   justify-content: center;
   gap: 6px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
 }
@@ -440,7 +440,7 @@ h1 {
 }
 
 .month-points span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -462,7 +462,7 @@ h1 {
 .weekday-row span {
   padding: 5px 3px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   text-align: center;
 }
@@ -521,7 +521,7 @@ h1 {
   max-width: 100%;
   overflow: hidden;
   color: var(--forest-mid);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -549,7 +549,7 @@ h1 {
   gap: 8px 16px;
   margin-top: 14px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .calendar-footer > span {
@@ -586,7 +586,7 @@ h1 {
 }
 
 .day-panel-heading .eyebrow {
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .day-panel-heading h2 {
@@ -606,7 +606,7 @@ h1 {
 .day-total small {
   margin-left: 4px;
   font-family: 'DM Sans', sans-serif;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -660,14 +660,14 @@ h1 {
   border-radius: 3px;
   background: var(--coral-soft);
   color: var(--coral);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .job-source {
   margin: 6px 0 0 15px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
@@ -679,7 +679,7 @@ h1 {
   margin: 4px 0 0 15px;
   color: var(--muted);
   font-family: 'DM Sans', sans-serif;
-  font-size: 9px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -701,7 +701,7 @@ h1 {
 
 .correction-controls label > span {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -716,7 +716,7 @@ h1 {
   border-radius: 4px;
   background: var(--surface);
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .save-correction {
@@ -730,7 +730,7 @@ h1 {
   background: var(--forest-mid);
   color: #fff;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 100ms ease;
 }
@@ -776,13 +776,13 @@ h1 {
 .job-greek-label {
   margin: 2px 0 0 15px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .points-note {
   margin: 4px 0 0 15px;
   color: #e8822a;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -791,7 +791,7 @@ h1 {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .category-current svg {
@@ -817,7 +817,7 @@ h1 {
 .category-group h4 {
   margin: 0;
   color: var(--group-accent);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -871,7 +871,7 @@ h1 {
 .category-option-text small {
   overflow: hidden;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -882,7 +882,7 @@ h1 {
   border-radius: 999px;
   background: color-mix(in srgb, var(--group-accent) 18%, transparent);
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   font-variant-numeric: tabular-nums;
 }
@@ -893,7 +893,7 @@ h1 {
   gap: 6px;
   padding: 2px 6px 4px 12px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -906,7 +906,7 @@ h1 {
   background: var(--surface);
   color: var(--ink);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
 }
 
@@ -928,7 +928,7 @@ h1 {
   background: transparent;
   color: var(--muted);
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .category-clear.is-selected {
@@ -951,7 +951,7 @@ h1 {
   background: transparent;
   color: var(--forest-mid);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -974,7 +974,7 @@ h1 {
   align-items: flex-start;
   gap: 8px;
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
@@ -994,14 +994,14 @@ h1 {
   align-items: center;
   gap: 5px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
 }
 
 .job-detail-copy p {
   margin: 4px 0 0;
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
@@ -1011,7 +1011,7 @@ h1 {
   display: block;
   margin-top: 4px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .job-details-loading,
@@ -1021,7 +1021,7 @@ h1 {
   gap: 7px;
   margin: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .day-panel-footer {
@@ -1029,7 +1029,7 @@ h1 {
   gap: 12px;
   padding-top: 13px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .day-panel-footer strong {
@@ -1098,7 +1098,7 @@ h1 {
 }
 
 .summary-total span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1130,13 +1130,13 @@ h1 {
 .summary-count {
   flex: 0 0 auto;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .summary-row strong {
   flex: 0 0 auto;
   color: var(--forest-mid);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .summary-row.is-pending strong {
@@ -1282,7 +1282,7 @@ h1 {
 }
 
 .password-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1295,7 +1295,7 @@ h1 {
 .login-error {
   margin: 0;
   color: var(--error);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .login-submit {
@@ -1347,7 +1347,7 @@ h1 {
   }
 
   .day-points {
-    font-size: 9px;
+    font-size: 12px;
   }
 }
 
@@ -1385,7 +1385,7 @@ h1 {
   .profile-select-wrap select {
     min-width: 0;
     max-width: 100%;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .toolbar-button {
@@ -1437,11 +1437,11 @@ h1 {
   .month-lock-button {
     min-height: 32px;
     padding: 0 7px;
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .month-lock-status {
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .month-navigation {
@@ -1469,7 +1469,7 @@ h1 {
 
   .weekday-row span {
     padding: 4px 0;
-    font-size: 8px;
+    font-size: 12px;
   }
 
   .calendar-weeks {
@@ -1483,17 +1483,17 @@ h1 {
   }
 
   .day-number {
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .day-points {
     width: 100%;
-    font-size: 8px;
+    font-size: 12px;
   }
 
   .calendar-footer {
     margin-top: 10px;
-    font-size: 9px;
+    font-size: 12px;
   }
 
   .calendar-footer .live-state {
@@ -1514,7 +1514,7 @@ h1 {
   }
 
   .summary-count {
-    font-size: 9px;
+    font-size: 12px;
   }
 }
 
@@ -1541,7 +1541,7 @@ h1 {
   }
 
   .brand-kicker {
-    font-size: 8px;
+    font-size: 12px;
   }
 
   .brand-title {
@@ -1559,7 +1559,7 @@ h1 {
   }
 
   .day-points {
-    font-size: 7px;
+    font-size: 12px;
   }
 
   .correction-controls {
@@ -1582,7 +1582,7 @@ h1 {
 
 .job-service-order {
   color: var(--ink);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -1635,7 +1635,7 @@ h1 {
   background: var(--surface);
   color: var(--ink);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1706,7 +1706,7 @@ h1 {
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -1742,7 +1742,7 @@ h1 {
   border: 1px solid var(--line-strong);
   border-radius: 5px;
   background: var(--surface);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -1786,7 +1786,7 @@ h1 {
   gap: 4px;
   margin-left: auto;
   color: var(--forest-mid);
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1801,7 +1801,7 @@ h1 {
   align-items: center;
   gap: 5px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1818,7 +1818,7 @@ h1 {
   align-items: flex-start;
   gap: 6px;
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   overflow-wrap: anywhere;
 }
 
@@ -1843,7 +1843,7 @@ h1 {
 
 .job-comment blockquote p {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
   font-style: italic;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -1854,7 +1854,7 @@ h1 {
   display: block;
   margin-top: 5px;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 12px;
   text-align: right;
 }
 
@@ -1866,7 +1866,7 @@ h1 {
 
 .correction-controls label > span {
   color: var(--ink);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .save-correction {
@@ -1881,7 +1881,7 @@ h1 {
   gap: 10px;
   margin-top: 12px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .job-card-footer strong {
@@ -1897,7 +1897,7 @@ h1 {
   background: transparent;
   color: var(--forest-mid);
   cursor: pointer;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1908,4 +1908,263 @@ h1 {
 
 .day-panel-footer .net-points {
   color: var(--forest-mid);
+}
+
+/* Shared navigation, admin tools, confirmations and status messages. */
+.toolbar-button.app-switch {
+  text-decoration: none;
+}
+
+.toolbar-button.admin-login {
+  border-style: dashed;
+}
+
+.notice-success {
+  border-color: color-mix(in srgb, #4a9875 40%, var(--line));
+  background: color-mix(in srgb, #4a9875 12%, var(--surface));
+  color: var(--ink);
+}
+
+.notice-pending {
+  border-color: color-mix(in srgb, #e09a1f 45%, var(--line));
+  background: color-mix(in srgb, #e09a1f 12%, var(--surface));
+  color: var(--ink);
+}
+
+.notice-success svg { color: #4a9875; }
+.notice-pending svg { color: #c27c0e; }
+
+.calendar-day.has-pending {
+  border-color: #e09a1f;
+}
+
+.day-pending-mark {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #e09a1f;
+}
+
+.legend-dot.legend-pending {
+  background: #e09a1f;
+}
+
+button.summary-row {
+  width: 100%;
+  padding: 0;
+  border-width: 0 0 1px;
+  border-style: solid;
+  border-color: var(--line);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.summary-row:hover .summary-category {
+  text-decoration: underline;
+}
+
+.correction-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.correction-actions .save-correction {
+  flex: 1 1 auto;
+}
+
+.cancel-correction,
+.secondary-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.confirm-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.confirm-actions .login-submit {
+  margin-top: 0;
+}
+
+.login-submit:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.points-guide {
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  font-size: 13px;
+}
+
+.points-guide summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--forest-mid);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.points-rules {
+  margin: 4px 0 12px;
+  padding-left: 18px;
+  line-height: 1.5;
+}
+
+.points-guide-group h3 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+}
+
+.points-guide-group dl {
+  margin: 0;
+}
+
+.points-guide-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.points-guide-row dd {
+  margin: 0;
+  color: var(--forest-mid);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-overview {
+  margin-bottom: 16px;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+}
+
+.admin-overview .toolbar-button {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.admin-overview-note {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.admin-table th,
+.admin-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.admin-table thead th {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-table td.has-pending {
+  color: #c27c0e;
+  font-weight: 700;
+}
+
+.admin-team-link {
+  display: grid;
+  min-height: 44px;
+  align-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.admin-team-link small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.admin-team-link:hover strong {
+  text-decoration: underline;
+}
+
+.admin-locked {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--forest-mid);
+  font-weight: 700;
+}
+
+.update-banner {
+  position: fixed;
+  z-index: 20;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  display: flex;
+  max-width: 520px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 auto;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--forest);
+  color: #fff;
+  font-size: 14px;
+  box-shadow: var(--shadow);
+}
+
+.update-banner button {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 4px;
+  background: #fff;
+  color: var(--forest);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 3px solid #3b82f6;
+  outline-offset: 2px;
 }

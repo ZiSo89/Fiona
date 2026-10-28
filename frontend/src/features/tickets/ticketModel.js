@@ -28,17 +28,40 @@ export function compareTickets(a, b) {
   return aSla < bSla ? -1 : 1;
 }
 
+const HOUR_MS = 60 * 60 * 1000;
+
+// Overdue completion or call deadlines need action now; a call deadline within the hour needs it soon.
+export function getTicketUrgency(ticket, now) {
+  const slaOverdue = getSlaState(ticket, now).kind === 'overdue';
+  const callRemainingMs = ticket.showCallDeadline && ticket.activityDueDate
+    ? new Date(ticket.activityDueDate).getTime() - now
+    : Number.NaN;
+  const callOverdue = !Number.isNaN(callRemainingMs) && callRemainingMs <= 0;
+  const callSoon = !Number.isNaN(callRemainingMs) && callRemainingMs > 0 && callRemainingMs <= HOUR_MS;
+  return { slaOverdue, callOverdue, callSoon, urgent: slaOverdue || callOverdue || callSoon };
+}
+
+// Urgent tickets first, then the usual appointment/SLA order.
+export function compareTicketsByUrgency(now) {
+  return (a, b) => {
+    const urgentA = getTicketUrgency(a, now).urgent;
+    const urgentB = getTicketUrgency(b, now).urgent;
+    if (urgentA !== urgentB) return urgentA ? -1 : 1;
+    return compareTickets(a, b);
+  };
+}
+
 export function normalizeTicketForUi(ticket) {
   const priority = ticket?.priority ?? { normalized: null, level: null, color: null, label: null };
 
   const slaDate = ticket?.sla?.deadline || ticket?.sla?.dueDate || ticket?.slaDate || null;
   const overDue = Boolean(ticket?.sla?.overdue || ticket?.isPastDue || false);
   const status = ticket?.order?.status || ticket?.status || 'OPEN';
-  const address = ticket?.customer?.fullAddress || ticket?.address || 'Address unavailable';
+  const address = ticket?.customer?.fullAddress || ticket?.address || '';
   const customerName = ticket?.customer?.name
     || ticket?.customer?.lastName
     || ticket?.customerName
-    || 'Customer';
+    || 'Πελάτης';
   const severity = String(ticket?.sla?.status || '').toLowerCase();
   const orderOwner = ticket?.raw?.OrderOwner || ticket?.OrderOwner;
   const ownerName = [orderOwner?.firstName, orderOwner?.lastName].filter(Boolean).join(' ');
@@ -57,7 +80,7 @@ export function normalizeTicketForUi(ticket) {
     storeName: ticket?.storeName || ticket?.raw?.storeName || 'Αλεξανδρούπολη',
     id: String(ticket?.id || ticket?.serviceOrderId || 'unknown'),
     serviceOrderId: String(ticket?.serviceOrderId || ticket?.id || 'unknown'),
-    title: ticket?.order?.planServiceDescription || ticket?.title || 'Service ticket',
+    title: ticket?.order?.planServiceDescription || ticket?.title || 'Εισιτήριο',
     customerName,
     customerLastName: ticket?.customer?.lastName || customerName,
     city: ticket?.customer?.city || '',

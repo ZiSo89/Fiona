@@ -13,7 +13,7 @@ test('monthly totals group completed jobs by category and Athens calendar day', 
   assert.equal(summary.totalJobs, 3);
   assert.equal(summary.totalPoints, 68);
   assert.deepEqual(summary.days, [
-    { date: '2026-10-01', jobCount: 3, points: 68 },
+    { date: '2026-10-01', jobCount: 3, points: 68, pendingCount: 1 },
   ]);
   assert.deepEqual(summary.categories.map(({ categoryId, jobCount, points }) => ({ categoryId, jobCount, points })), [
     { categoryId: 'ftth_installation', jobCount: 1, points: 50 },

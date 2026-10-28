@@ -24,7 +24,7 @@ export function buildProjectTrackerMonth(month, jobs) {
     const categoryKey = category?.id ?? 'unmapped';
     const categoryTotal = categoryTotals.get(categoryKey) ?? {
       categoryId: category?.id ?? null,
-      categoryName: category?.name ?? 'Needs category mapping',
+      categoryName: category?.name ?? 'Χωρίς αντιστοίχιση',
       jobCount: 0,
       points: 0,
       mapped: Boolean(category),
@@ -34,9 +34,10 @@ export function buildProjectTrackerMonth(month, jobs) {
     categoryTotals.set(categoryKey, categoryTotal);
 
     const day = athensDayOf(job.closedAt);
-    const dayTotal = dayTotals.get(day) ?? { date: day, jobCount: 0, points: 0 };
+    const dayTotal = dayTotals.get(day) ?? { date: day, jobCount: 0, points: 0, pendingCount: 0 };
     dayTotal.jobCount += 1;
     dayTotal.points += job.points;
+    if (!category) dayTotal.pendingCount += 1;
     dayTotals.set(day, dayTotal);
   }
 

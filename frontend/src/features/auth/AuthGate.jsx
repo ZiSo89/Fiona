@@ -70,14 +70,16 @@ export default function AuthGate({ children }) {
     }
   }
 
-  if (state === 'checking') return null;
+  if (state === 'checking') {
+    return <main className="login-screen"><p className="auth-loading" role="status">Φόρτωση…</p></main>;
+  }
   if (state === 'in') return children;
 
   return (
     <main className="login-screen">
       <form className="login-card" onSubmit={submit}>
-        <h1>Fiona</h1>
-        <label htmlFor="password">Κωδικός</label>
+        <h1>Εισιτήρια Fiona</h1>
+        <label htmlFor="password">Κωδικός εφαρμογής</label>
         <input
           id="password"
           type="password"
@@ -87,7 +89,7 @@ export default function AuthGate({ children }) {
           onChange={(event) => setPassword(event.target.value)}
         />
         {error && <p className="login-error" role="alert">{error}</p>}
-        <button type="submit" disabled={busy || !password}>Είσοδος</button>
+        <button type="submit" disabled={busy || !password}>{busy ? 'Σύνδεση…' : 'Είσοδος'}</button>
       </form>
     </main>
   );

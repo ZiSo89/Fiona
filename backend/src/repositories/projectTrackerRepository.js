@@ -177,7 +177,7 @@ export async function createProjectTrackerRepository(dbPath = config.closedTicke
         correction.teamName,
         athensMonthOf(previous.closed_at),
       ))?.locked) {
-        const error = new Error('This month is locked for payment');
+        const error = new Error('Ο μήνας έχει εγκριθεί για πληρωμή και δεν αλλάζει.');
         error.code = 'PROJECT_TRACKER_MONTH_LOCKED';
         throw error;
       }

@@ -34,19 +34,13 @@ export const formatDataAge = (dateValue, now) => {
 
 export const athensDay = (value) => new Date(value).toLocaleDateString('en-CA', { timeZone: 'Europe/Athens' });
 
+// Seconds matter only in the last hour; longer waits read better as days, hours and minutes.
 export const formatTimer = (ms) => {
   const total = Math.max(0, Math.floor(ms / 1000));
   const days = Math.floor(total / 86400);
-  const pad = (value) => String(value).padStart(2, '0');
-  return `${days ? `${days}d ` : ''}${pad(Math.floor((total % 86400) / 3600))}:${pad(Math.floor((total % 3600) / 60))}:${pad(total % 60)}`;
-};
-
-export const formatActionCountdown = (dateValue, now) => {
-  if (!dateValue) return null;
-
-  const remainingMs = new Date(dateValue).getTime() - now;
-  if (Number.isNaN(remainingMs)) return null;
-  return remainingMs > 0
-    ? `σε ${formatTimer(remainingMs)}`
-    : `εκπρόθεσμο κατά ${formatTimer(Math.abs(remainingMs))}`;
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (days) return `${days} ημ. ${hours} ώρ.`;
+  if (hours) return `${hours} ώρ. ${minutes} λεπ.`;
+  return `${String(minutes).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 };

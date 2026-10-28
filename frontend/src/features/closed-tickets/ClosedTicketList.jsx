@@ -71,7 +71,7 @@ function TicketDetails({ orderId, storeId }) {
     <div key={label} className="detail-row">
       <span className="detail-label">{label}</span>
       <span className="detail-value">{value}</span>
-      <button type="button" className="copy-btn" aria-label={`Αντιγραφή: ${label}`} title="Αντιγραφή" onClick={() => copyOne(label, value)}>{copiedLabel === label ? '✓' : '⧉'}</button>
+      <button type="button" className="copy-btn" aria-label={`Αντιγραφή: ${label}`} title="Αντιγραφή" onClick={() => copyOne(label, value)}><Icon name={copiedLabel === label ? 'check' : 'copy'} size={16} /></button>
     </div>
   );
 
@@ -79,7 +79,7 @@ function TicketDetails({ orderId, storeId }) {
     <div className="detail-panel">
       <div className="detail-head">
         <span className="detail-title">Δεδομένα πελάτη</span>
-        <button type="button" className="copy-all" disabled={copying} onClick={copyAll}>Copy all</button>
+        <button type="button" className="copy-all" disabled={copying} onClick={copyAll}><Icon name="copy" size={15} /> {copying ? 'Αντιγραφή…' : 'Αντιγραφή όλων'}</button>
       </div>
       {customerRows.map(renderRow)}
       <div className="detail-rule" />
@@ -112,7 +112,7 @@ function ClosedItem({ ticket, storeName }) {
           <span className="done-id-row">
             <span className="done-order-id">#{ticket.serviceOrderId}</span>
             <span className="done-time"><Icon name="clock" size={14} />{closedDateTime}</span>
-            <span className="done-chevron" aria-hidden="true">{open ? '⌃' : '⌄'}</span>
+            <span className="done-chevron" aria-hidden="true"><Icon name={open ? 'chevronUp' : 'chevronDown'} size={18} /></span>
           </span>
           <span className="done-card-meta">
             <span><Icon name="user" size={14} />{ticket.team || 'Δεν έχει οριστεί'}</span>

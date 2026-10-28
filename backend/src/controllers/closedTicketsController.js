@@ -15,7 +15,7 @@ export async function getStats(req, res) {
   } catch (error) {
     if (error.isDatabaseError) {
       console.error('Closed ticket statistics failed:', error.code || error.name);
-      return res.status(500).json({ success: false, message: 'Unable to access application data' });
+      return res.status(500).json({ success: false, message: 'Δεν ήταν δυνατή η πρόσβαση στα δεδομένα. Δοκίμασε ξανά.' });
     }
     return res.status(error.status || 500).json({ success: false, message: error.message });
   }
@@ -24,19 +24,19 @@ export async function getStats(req, res) {
 export async function getDetails(req, res) {
   try {
     if (!/^[\w-]{1,40}$/.test(req.params.orderId)) {
-      return res.status(400).json({ success: false, message: 'Invalid order ID' });
+      return res.status(400).json({ success: false, message: 'Μη έγκυρος κωδικός εργασίας.' });
     }
     const storeId = String(req.query.store || 'alexandroupoli');
     if (!getConfiguredStores().some((store) => store.storeId === storeId)) {
-      return res.status(400).json({ success: false, message: 'A configured store is required' });
+      return res.status(400).json({ success: false, message: 'Επίλεξε ρυθμισμένο κατάστημα.' });
     }
     const ticket = await getClosedTicketDetails(req.params.orderId, (await getStatsRepositories(storeId)).closed, storeId);
-    if (!ticket) return res.status(404).json({ success: false, message: 'Not found' });
+    if (!ticket) return res.status(404).json({ success: false, message: 'Δεν βρέθηκε.' });
     return res.json({ success: true, ticket });
   } catch (error) {
     if (error.isDatabaseError) {
       console.error('Closed ticket details failed:', error.code || error.name);
-      return res.status(500).json({ success: false, message: 'Unable to access application data' });
+      return res.status(500).json({ success: false, message: 'Δεν ήταν δυνατή η πρόσβαση στα δεδομένα. Δοκίμασε ξανά.' });
     }
     return res.status(500).json({ success: false, message: error.message });
   }

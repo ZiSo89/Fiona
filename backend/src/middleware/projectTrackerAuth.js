@@ -77,15 +77,15 @@ export function createProjectTrackerAuth({
   }
 
   function login(req, res) {
-    if (!key) return res.status(503).json({ success: false, message: 'Tracker editor sessions are not configured' });
-    if (tooManyFailures(req.ip)) return res.status(429).json({ success: false, message: 'Too many attempts. Try again later.' });
+    if (!key) return res.status(503).json({ success: false, message: 'Η σύνδεση στο tracker δεν έχει ρυθμιστεί.' });
+    if (tooManyFailures(req.ip)) return res.status(429).json({ success: false, message: 'Πολλές αποτυχημένες προσπάθειες. Δοκίμασε ξανά σε λίγα λεπτά.' });
 
     const supplied = sha256(String(req.body?.password ?? ''));
     const expectedAdmin = sha256(adminPassword || crypto.randomBytes(32).toString('hex'));
     if (req.body?.role === 'admin') {
       if (!adminPassword || !crypto.timingSafeEqual(supplied, expectedAdmin)) {
         recordFailure(req.ip);
-        return res.status(adminPassword ? 401 : 403).json({ success: false, message: 'Invalid editor credentials' });
+        return res.status(adminPassword ? 401 : 403).json({ success: false, message: 'Λάθος κωδικός.' });
       }
       failures.delete(req.ip);
       res.setHeader('Set-Cookie', cookie(req, issueToken({ role: 'admin' }), SESSION_MS / 1000));
@@ -93,7 +93,7 @@ export function createProjectTrackerAuth({
     }
 
     if (req.body?.role && req.body.role !== 'editor') {
-      return res.status(400).json({ success: false, message: 'Invalid tracker role' });
+      return res.status(400).json({ success: false, message: 'Μη έγκυρος τύπος χρήστη.' });
     }
     const storeId = String(req.body?.storeId ?? '').trim();
     const teamName = String(req.body?.teamName ?? '').trim();
@@ -101,7 +101,7 @@ export function createProjectTrackerAuth({
     const expected = sha256(password ?? crypto.randomBytes(32).toString('hex'));
     if (!password || !crypto.timingSafeEqual(supplied, expected)) {
       recordFailure(req.ip);
-      return res.status(password ? 401 : 403).json({ success: false, message: 'Invalid editor credentials' });
+      return res.status(password ? 401 : 403).json({ success: false, message: 'Λάθος κωδικός.' });
     }
 
     failures.delete(req.ip);
@@ -122,7 +122,7 @@ export function createProjectTrackerAuth({
     },
     requireAuth(req, res, next) {
       const editor = readSession(req);
-      if (!editor) return res.status(401).json({ success: false, message: 'Tracker editor login required' });
+      if (!editor) return res.status(401).json({ success: false, message: 'Χρειάζεται σύνδεση για αυτή την ενέργεια.' });
       req.trackerEditor = editor;
       return next();
     },

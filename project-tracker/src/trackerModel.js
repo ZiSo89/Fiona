@@ -133,9 +133,12 @@ export function shiftMonth(month, amount) {
   return new Date(Date.UTC(year, monthNumber - 1 + amount, 1)).toISOString().slice(0, 7);
 }
 
+// Greek calendars start the week on Monday.
+export const WEEKDAY_LABELS = ['ΔΕΥ', 'ΤΡΙ', 'ΤΕΤ', 'ΠΕΜ', 'ΠΑΡ', 'ΣΑΒ', 'ΚΥΡ'];
+
 export function calendarCells(month) {
   const [year, monthNumber] = month.split('-').map(Number);
-  const firstDay = new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay();
+  const firstDay = (new Date(Date.UTC(year, monthNumber - 1, 1)).getUTCDay() + 6) % 7;
   const dayCount = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
   const total = Math.ceil((firstDay + dayCount) / 7) * 7;
   return Array.from({ length: total }, (_, index) => {
@@ -162,9 +165,9 @@ const greekServiceTypes = {
   'cpe installation': 'Εγκατάσταση EON',
   'cpe installation dth tv': 'Εγκατάσταση Δορυφορικής',
   'on-site support dth tv': 'Βλάβη Δορυφορικής',
-  'combined wind-ap': 'Συνδιαστικό',
-  'combined visit ote-wind': 'Συνδιαστικό',
-  'combined llu visit ote-wind': 'Συνδιαστικό',
+  'combined wind-ap': 'Συνδυαστικό',
+  'combined visit ote-wind': 'Συνδυαστικό',
+  'combined llu visit ote-wind': 'Συνδυαστικό',
   'co visit': 'Βλάβη χαλκού (CO Visit)',
   'cabling repair and maintenance': 'Νέα εγκατάσταση / επισκευή καλωδίωσης',
 };
@@ -188,8 +191,52 @@ export async function trackerRequest(path, options = {}) {
     },
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || `Request failed (${response.status})`);
+  if (!response.ok) throw new Error(data.message || `Το αίτημα απέτυχε (${response.status}). Δοκίμασε ξανά.`);
   return data;
+}
+
+export function formatTime(value) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? ''
+    : date.toLocaleTimeString('el-GR', { timeZone: 'Europe/Athens', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+}
+
+// Plain HTTP on a phone has no navigator.clipboard, so fall back to execCommand.
+export async function copyText(value) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    const area = document.createElement('textarea');
+    area.value = value;
+    area.setAttribute('readonly', '');
+    area.style.cssText = 'position:fixed;opacity:0';
+    document.body.appendChild(area);
+    area.select();
+    const copied = document.execCommand('copy');
+    area.remove();
+    if (!copied) throw new Error('copy failed');
+  }
+}
+
+const csvCell = (value) => {
+  const text = String(value ?? '');
+  return /[";\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+};
+
+// Semicolons and a BOM let Greek Excel open the file with the right columns and characters.
+export function overviewCsv(month, teams) {
+  const header = ['Μήνας', 'Κατάστημα', 'Συνεργείο', 'Εργασίες', 'Πόντοι', 'Εκκρεμή', 'Εγκεκριμένο'];
+  const rows = teams.map((team) => [
+    month,
+    team.storeName,
+    team.teamName,
+    team.jobCount,
+    team.points,
+    team.pendingCount,
+    team.paymentLock?.locked ? 'Ναι' : 'Όχι',
+  ]);
+  return `\uFEFF${[header, ...rows].map((row) => row.map(csvCell).join(';')).join('\r\n')}\r\n`;
 }
 
 export function jobGreekLabel(job) {
