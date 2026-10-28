@@ -216,6 +216,14 @@ function updateMonthJob(monthData, previousJob, nextJob) {
   };
 }
 
+// Keeps the card in view after the picker collapses and the page height shrinks.
+function scrollToJob(key) {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const card = [...document.querySelectorAll('[data-job-key]')].find((node) => node.dataset.jobKey === key);
+    card?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }));
+}
+
 function readTrackerView() {
   try {
     const saved = JSON.parse(localStorage.getItem('project-tracker-view') || '{}');
@@ -598,6 +606,7 @@ function App() {
         return next;
       });
       setPickerJobId('');
+      scrollToJob(key);
       setRefreshTick((tick) => tick + 1);
     } catch (requestError) {
       setError(requestError.message);
@@ -817,7 +826,7 @@ function App() {
                     || (draft.pointsOverride !== undefined && draft.pointsOverride !== originalJob.pointsOverride);
                   const pickerOpen = pickerJobId === key || (!draft.categoryId && !draft.pickerClosed);
                   return (
-                    <article className="job-row" key={key}>
+                    <article className="job-row" key={key} data-job-key={key}>
                       <div className="job-category-line">
                         <span className={`category-marker ${job.mapped ? 'mapped' : 'unmapped'}`} />
                         <h3>{jobLabel(job)}</h3>
@@ -866,7 +875,10 @@ function App() {
                                   {!isDirty && job.mapped && !job.correctedAt && <Check size={12} />}
                                 </span>
                                 {draft.categoryId && (
-                                  <button type="button" className="edit-points-link" onClick={() => setPickerJobId(pickerJobId === key ? '' : key)}>
+                                  <button type="button" className="edit-points-link" onClick={() => {
+                                    if (pickerJobId === key) scrollToJob(key);
+                                    setPickerJobId(pickerJobId === key ? '' : key);
+                                  }}>
                                     {pickerJobId === key ? 'Κλείσιμο' : 'Αλλαγή'}
                                   </button>
                                 )}
@@ -876,6 +888,7 @@ function App() {
                                     className="edit-points-link"
                                     onClick={() => {
                                       setPickerJobId('');
+                                      scrollToJob(key);
                                       setDrafts((current) => ({ ...current, [key]: { ...draft, pickerClosed: true } }));
                                     }}
                                   >

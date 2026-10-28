@@ -208,7 +208,8 @@ test('scores cabling at 50 only when the latest comment confirms installation or
       incomplete: 'Η εργασία ολοκληρώθηκε.',
       'routing-only': 'Έγινε όδευση στο σημείο.',
       'standalone-routing': 'Η όδευση.',
-      'reverse-order': 'Η όδευση έγινε.',
+      'reverse-order': 'η όδευση έγινε σύμφωνα με το πελάτη σωστό όρο και διεύθυνση υπηρεσίες οκ',
+      'reverse-installation': 'Η εγκατάσταση έγινε.',
       'standalone-installation': 'Η εγκατάσταση.',
     };
     const client = {
@@ -248,7 +249,8 @@ test('scores cabling at 50 only when the latest comment confirms installation or
     assert.equal(repository.getJob('alexandroupoli', 'incomplete').points, 15);
     assert.equal(repository.getJob('alexandroupoli', 'routing-only').points, 50);
     assert.equal(repository.getJob('alexandroupoli', 'standalone-routing').points, 15);
-    assert.equal(repository.getJob('alexandroupoli', 'reverse-order').points, 15);
+    assert.equal(repository.getJob('alexandroupoli', 'reverse-order').points, 50);
+    assert.equal(repository.getJob('alexandroupoli', 'reverse-installation').points, 50);
     assert.equal(repository.getJob('alexandroupoli', 'standalone-installation').points, 15);
   });
 });
@@ -365,7 +367,7 @@ test('5.8.5 scores 15 without either routing phrase; 5.10 stays at 50', async ()
           orderType: 'FTTH Installation',
           categoryId06: ['existing-visit-ok', 'visit-ok'].includes(orderId)
             ? '5.10 Visit OK, Delivery OK'
-            : '5.8.5',
+            : orderId === 'installation-only' ? '5.3 Wrong customer data' : '5.8.5',
         };
       },
       async fetchLatestCommentWithSession(orderId) {

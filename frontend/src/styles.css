@@ -679,8 +679,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .customer-line { display: grid; gap: 4px; margin: 0 0 12px; padding: 10px 12px; border-left: 4px solid #00b8d4; border-radius: 8px; background: rgb(255 255 255 / 6%); color: #e6ebf0; }
 .customer-address-row { display: flex; align-items: flex-start; gap: 8px; margin: 0; min-width: 0; }
 .customer-address-row svg { flex: 0 0 auto; margin-top: 3px; color: #00d4f0; }
-.customer-name { color: #fff; font-size: 1.08rem; font-weight: 800; line-height: 1.2; letter-spacing: 0.01em; }
-.customer-address { font-size: 0.92rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.customer-name { color: #fff; font-size: 1rem; font-weight: 800; line-height: 1.2; letter-spacing: 0.01em; }
+.customer-address { font-size: 0.85rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
 .card-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 6px; }
 .card-action { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--text); font-size: 0.78rem; font-weight: 600; text-decoration: none; }
 .card-action svg { color: var(--blue); }
@@ -782,6 +782,8 @@ button.done-card { width: 100%; text-align: left; font: inherit; cursor: pointer
   :root { --bg: #f8fafc; --surface: #ffffff; --surface-raised: #f1f5f9; --text: #0f172a; --muted: #64748b; --details: #94a3b8; --line: #e2e8f0; }
   .field-header { background: rgba(255, 255, 255, 0.96); }
   .status-badge { color: #0369a1; }
+  .customer-line { background: #f1f5f9; color: #334155; }
+  .customer-name, .customer-address { color: #0f172a; }
 }
 
 .comparison-note, .duration-summary, .distribution-row, .pattern-row {

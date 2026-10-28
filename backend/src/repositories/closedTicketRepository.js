@@ -229,6 +229,12 @@ export function createClosedTicketRepository(dbPath = config.closedTicketsDbPath
     FROM closed_tickets
     WHERE (? IS NULL OR store_id = ?) AND work_order_sla_outcome = 'unknown' AND work_order_sla_date IS NULL
   `);
+  const trackGroupNamedClosedStatement = database.prepare(`
+    INSERT OR IGNORE INTO pending_closures (store_id, order_id, service_order_id, team_name, first_seen_at)
+    SELECT store_id, order_id, service_order_id, team_name, ?
+    FROM closed_tickets
+    WHERE (? IS NULL OR store_id = ?) AND instr(upper(team_name), upper(?)) > 0
+  `);
   const listPendingStatement = database.prepare('SELECT * FROM pending_closures WHERE (? IS NULL OR store_id = ?) ORDER BY first_seen_at');
   const listDuePendingStatement = database.prepare(`
     SELECT * FROM pending_closures
@@ -274,6 +280,10 @@ export function createClosedTicketRepository(dbPath = config.closedTicketsDbPath
     },
     trackUnknownClosed(seenAt = new Date()) {
       trackUnknownClosedStatement.run(seenAt.toISOString(), storeId, storeId);
+    },
+    trackGroupNamedClosed(groupMatch, seenAt = new Date()) {
+      if (!groupMatch) return;
+      trackGroupNamedClosedStatement.run(seenAt.toISOString(), storeId, storeId, groupMatch);
     },
     listPending() {
       return listPendingStatement.all(storeId, storeId);
