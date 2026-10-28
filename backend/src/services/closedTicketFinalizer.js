@@ -19,8 +19,24 @@ const athensDayFormatter = new Intl.DateTimeFormat('en-GB', {
   year: 'numeric',
 });
 
-// Order details do not include the crew; the daily workorders list does.
-async function findDailyTeamName(client, orderId, dates) {
+// Fiona often reports the service group ("NEW TECHNOLOGIES LTD KOMOTINI") where the assigned crew belongs.
+function createGroupFilter(client, details, extraGroups = []) {
+  const storeMatch = cleanTeamName(client.config?.closedServiceGroupMatch)?.toUpperCase();
+  const groups = new Set([
+    ...extraGroups,
+    findOrderField(details, 'serviceGroup'),
+    findOrderField(details, 'serviceGroupName'),
+  ].map((value) => cleanTeamName(value)?.toUpperCase()).filter(Boolean));
+  return (value) => {
+    const name = cleanTeamName(value);
+    if (!name) return null;
+    const upper = name.toUpperCase();
+    return groups.has(upper) || (storeMatch && upper.includes(storeMatch)) ? null : name;
+  };
+}
+
+// Order details do not reliably include the crew; the daily workorders list does.
+async function findDailyTeamName(client, orderId, dates, details, dailyCache) {
   if (typeof client.dailyWorkorders !== 'function') return null;
   const groups = client.config?.closedServiceGroups?.length
     ? client.config.closedServiceGroups
@@ -32,9 +48,9 @@ async function findDailyTeamName(client, orderId, dates) {
   }).filter(Boolean))];
   for (const workDate of workDates) {
     try {
-      const workorders = await client.dailyWorkorders(workDate, groups);
-      const match = workorders.find((workorder) => String(workorder?.orderId ?? workorder?.id) === String(orderId));
-      const teamName = cleanTeamName(match?.teamName);
+      if (!dailyCache.has(workDate)) dailyCache.set(workDate, await client.dailyWorkorders(workDate, groups));
+      const match = dailyCache.get(workDate).find((workorder) => String(workorder?.orderId ?? workorder?.id) === String(orderId));
+      const teamName = createGroupFilter(client, details, [match?.teamGroupName, match?.serviceGroupName])(match?.teamName);
       if (teamName) return teamName;
     } catch {
       // Try the next candidate day.
@@ -51,6 +67,7 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
   async function finalizeVanished(openOrderIds) {
     const pending = repository.listDuePending(now()).filter((row) => !openOrderIds.has(row.order_id));
     const summary = { inserted: 0, retry: 0, dropped: 0 };
+    const dailyCache = new Map();
 
     for (const row of pending.slice(0, MAX_PER_RUN)) {
       const giveUp = () => {
@@ -65,19 +82,21 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
 
       try {
         const details = await client.orderDetails(row.order_id);
-        const order = {
-          orderId: row.order_id,
-          serviceOrderId: row.service_order_id,
-          teamName: cleanTeamName(findOrderField(details, 'teamName')) ?? cleanTeamName(row.team_name),
-        };
+        const order = { orderId: row.order_id, serviceOrderId: row.service_order_id };
         const preliminaryRecord = buildClosedTicketRecord(order, details, {}, null, now());
         if (!preliminaryRecord) {
           giveUp();
           continue;
         }
-        if (!preliminaryRecord.team_name) {
-          order.teamName = await findDailyTeamName(client, row.order_id, [preliminaryRecord.scheduled_at, preliminaryRecord.closed_at]);
-        }
+        const crewOnly = createGroupFilter(client, details);
+        const teamName = await findDailyTeamName(
+          client,
+          row.order_id,
+          [preliminaryRecord.scheduled_at, preliminaryRecord.closed_at],
+          details,
+          dailyCache,
+        ) ?? crewOnly(findOrderField(details, 'teamName')) ?? crewOnly(row.team_name);
+        order.teamName = teamName;
         const serviceOrderId = preliminaryRecord.service_order_id || row.service_order_id || '';
         const workOrderData = await client.fetchWorkOrderSlaDetailsWithSession(serviceOrderId);
         const comment = await client.fetchLatestCommentWithSession(row.order_id);
@@ -86,6 +105,8 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
           repository.removePending(row.order_id);
           continue;
         }
+        // The record builder falls back to the details' team, which can be the group name.
+        record.team_name = teamName;
 
         // The crew can appear in Fiona's daily list later; wait instead of storing a ticket without one.
         if (!record.team_name && row.attempts + 1 < MAX_ATTEMPTS) {
@@ -140,6 +161,8 @@ export function createClosedTicketFinalizer({ client, repository, now = () => ne
       try {
         repository.trackOpen(rows, now());
         repository.trackUnknownClosed(now());
+        // Re-resolve rows that were stored with a group name instead of the assigned crew.
+        repository.trackGroupNamedClosed(cleanTeamName(client.config?.closedServiceGroupMatch), now());
         return await finalizeVanished(openOrderIds);
       } finally {
         running = false;

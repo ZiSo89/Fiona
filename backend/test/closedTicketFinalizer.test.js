@@ -186,6 +186,71 @@ test('retries old unknown tickets and uses the authoritative service order and t
   repository.close();
 });
 
+test('a group name from the open list or order details never replaces the assigned crew', async () => {
+  const repository = createClosedTicketRepository(':memory:', 'komotini');
+  const client = {
+    config: { closedServiceGroupMatch: 'KOMOTINI' },
+    orderDetails: async () => ({ ...completed, teamName: 'NEW TECHNOLOGIES LTD KOMOTINI', serviceGroup: 'NEW TECHNOLOGIES LTD KOMOTINI' }),
+    dailyWorkorders: async () => [{ orderId: '77', teamName: 'Nikolaos Katinas', teamGroupName: 'NEW TECHNOLOGIES LTD KOMOTINI' }],
+    fetchWorkOrderSlaDetailsWithSession: async () => ({ workOrderSlaDate: '2026-10-12T10:00:00Z' }),
+    fetchLatestCommentWithSession: async () => null,
+  };
+  const finalizer = createClosedTicketFinalizer({ client, repository });
+  const groupTicket = { id: '77', serviceOrderId: 'PS1-1', dispatch: { crewName: 'NEW TECHNOLOGIES LTD KOMOTINI' } };
+
+  await finalizer.process([groupTicket]);
+  await finalizer.process([otherTicket]);
+
+  assert.equal(repository.getByOrderId('77').team_name, 'Nikolaos Katinas');
+  repository.close();
+});
+
+test('a group name is never stored when the crew cannot be found', async () => {
+  const repository = createClosedTicketRepository(':memory:', 'komotini');
+  let now = new Date('2026-10-12T12:00:00.000Z');
+  const client = {
+    config: { closedServiceGroupMatch: 'KOMOTINI' },
+    orderDetails: async () => ({ ...completed, teamName: 'NEW TECHNOLOGIES LTD KOMOTINI' }),
+    dailyWorkorders: async () => [],
+    fetchWorkOrderSlaDetailsWithSession: async () => ({ workOrderSlaDate: '2026-10-12T10:00:00Z' }),
+    fetchLatestCommentWithSession: async () => null,
+  };
+  const finalizer = createClosedTicketFinalizer({ client, repository, now: () => now });
+  const groupTicket = { id: '77', serviceOrderId: 'PS1-1', dispatch: { crewName: 'NEW TECHNOLOGIES LTD KOMOTINI' } };
+
+  await finalizer.process([groupTicket]);
+  for (let attempt = 0; attempt < 8 && !repository.hasOrder('77'); attempt += 1) {
+    await finalizer.process([otherTicket]);
+    now = new Date(now.getTime() + 25 * 60 * 60 * 1000);
+  }
+  assert.equal(repository.getByOrderId('77').team_name, null);
+  repository.close();
+});
+
+test('tickets already stored with a group name are repaired with the assigned crew', async () => {
+  const repository = createClosedTicketRepository(':memory:', 'komotini');
+  const stored = buildClosedTicketRecord(
+    { orderId: '90', serviceOrderId: 'PS9-1', teamName: 'NEW TECHNOLOGIES LTD KOMOTINI' },
+    { ...completed, serviceOrderId: 'PS9-1' },
+    { workOrderSlaDate: '2026-10-12T10:00:00Z' },
+    null,
+  );
+  repository.insert({ ...stored, store_id: 'komotini' });
+  const client = {
+    config: { closedServiceGroupMatch: 'KOMOTINI' },
+    orderDetails: async () => ({ ...completed, teamName: 'NEW TECHNOLOGIES LTD KOMOTINI' }),
+    dailyWorkorders: async () => [{ orderId: '90', teamName: 'Nikolaos Katinas' }],
+    fetchWorkOrderSlaDetailsWithSession: async () => ({ workOrderSlaDate: '2026-10-12T10:00:00Z' }),
+    fetchLatestCommentWithSession: async () => null,
+  };
+  const finalizer = createClosedTicketFinalizer({ client, repository });
+
+  await finalizer.process([otherTicket]);
+
+  assert.equal(repository.getByOrderId('90').team_name, 'Nikolaos Katinas');
+  repository.close();
+});
+
 test('a vanished ticket that is not completed is retried then dropped', async () => {
   const repository = createClosedTicketRepository(':memory:');
   let now = new Date('2026-10-12T12:00:00.000Z');

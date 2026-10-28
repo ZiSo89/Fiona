@@ -63,14 +63,15 @@ function readCategoryFields(order, details, categoryMap) {
 
 const FTTH_PARTIAL_POINTS = 15;
 const CABLING_COMPLETED_POINTS = 50;
-const PROJECT_TRACKER_SCORING_RULE_VERSION = 2;
+const PROJECT_TRACKER_SCORING_RULE_VERSION = 4;
 
 function readClosingCategory(order, details) {
   return fieldText(findOrderField(details, 'categoryId06') ?? order?.Categorization?.categoryId06);
 }
 
+// Every FTTH closing other than a successful visit (5.10) scores 15 unless the comment confirms the routing was done.
 function needsRoutingComment(categoryId, closingCategory) {
-  return categoryId === 'ftth_installation' && /^5\.8\.5(\D|$)/.test(closingCategory ?? '');
+  return categoryId === 'ftth_installation' && Boolean(closingCategory) && !/^5\.10(\D|$)/.test(closingCategory);
 }
 
 function needsCablingComment(categoryId) {
@@ -88,7 +89,7 @@ function commentMentionsRouting(text) {
 
 function commentMentionsCompletedInstallationOrRouting(text) {
   const normalized = String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-  return /(^|[^\p{L}\p{N}_])εγινε\s+(?:οδευση|εγκατασταση)(?=$|[^\p{L}\p{N}_])/u.test(normalized);
+  return /(^|[^\p{L}\p{N}_])(?:εγινε\s+(?:οδευση|εγκατασταση)|(?:οδευση|εγκατασταση)\s+εγινε)(?=$|[^\p{L}\p{N}_])/u.test(normalized);
 }
 
 export async function syncProjectTracker({
