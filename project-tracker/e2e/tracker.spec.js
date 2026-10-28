@@ -35,8 +35,16 @@ test('the login dialog closes with Esc and returns focus to its button', async (
 
 test('theme toggle applies and remembers the charcoal dark theme', async ({ page }) => {
   await page.goto('/tracker/');
+  const storeHeadingColors = () => page.locator('.profile-select-wrap optgroup').first()
+    .evaluate((group) => [getComputedStyle(group).color, getComputedStyle(group).backgroundColor]);
+  const [lightText, lightBackground] = await storeHeadingColors();
+  expect(lightText).not.toBe(lightBackground);
+  expect(lightText).not.toBe('rgb(248, 251, 248)');
 
   await page.getByRole('button', { name: 'Ενεργοποίηση σκοτεινού θέματος' }).click();
+  const [darkText, darkBackground] = await storeHeadingColors();
+  expect(darkText).not.toBe(darkBackground);
+  expect(darkBackground).toBe('rgb(34, 39, 45)');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect.poll(() => page.evaluate(() => localStorage.getItem('project-tracker-theme'))).toBe('dark');
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(23, 26, 31)');

@@ -210,6 +210,14 @@ h2,
   color: var(--ink);
 }
 
+/* Store headings inherit the select's light topbar text, so give them the list colors explicitly. */
+.profile-select-wrap select optgroup {
+  background: var(--surface);
+  color: var(--muted);
+  font-style: normal;
+  font-weight: 700;
+}
+
 .toolbar-button,
 .icon-button {
   min-height: 40px;
