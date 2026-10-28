@@ -1,5 +1,5 @@
 import express from 'express';
-import cors from 'cors';
+import helmet from 'helmet';
 import { config } from './config.js';
 import { createAuth } from './middleware/auth.js';
 import { createProjectTrackerAuth } from './middleware/projectTrackerAuth.js';
@@ -16,7 +16,18 @@ import { mountStaticApps } from './routes/staticRoutes.js';
 export async function createApp() {
   const app = express();
   app.set('trust proxy', 'loopback');
-  app.use(cors());
+  // Both PWAs and the API share one origin, so no CORS headers are sent.
+  app.use(helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        'style-src': ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        'font-src': ["'self'", 'https://fonts.gstatic.com', 'data:'],
+        'img-src': ["'self'", 'data:', 'blob:'],
+        'upgrade-insecure-requests': null,
+      },
+    },
+  }));
   app.use(express.json());
 
   const auth = createAuth(config.appPassword);

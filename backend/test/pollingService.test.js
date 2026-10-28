@@ -59,3 +59,54 @@ test('polling snapshots attach store identity to every ticket', async () => {
   assert.equal(snapshot.tickets[0].storeId, 'komotini');
   assert.equal(snapshot.tickets[0].storeName, 'Κομοτηνή');
 });
+test('a refresh keeps the previous outcome visible instead of reporting polling', async () => {
+  let resolveFetch;
+  const service = createPollingService({
+    fetchOrders: () => new Promise((resolve) => { resolveFetch = resolve; }),
+  }, 60000);
+
+  const first = service.refreshTickets();
+  assert.equal(service.getLatestSnapshot().status, 'polling');
+  resolveFetch({ FilteredOrders: [] });
+  await first;
+
+  const second = service.refreshTickets();
+  const during = service.getLatestSnapshot();
+  assert.equal(during.status, 'live');
+  assert.equal(during.refreshing, true);
+  resolveFetch({ FilteredOrders: [] });
+  await second;
+  assert.equal(service.getLatestSnapshot().refreshing, false);
+});
+
+test('a live snapshot turns stale after two missed poll intervals', async () => {
+  let currentTime = Date.parse('2026-10-18T10:00:00.000Z');
+  const service = createPollingService({
+    fetchOrders: async () => ({ FilteredOrders: [] }),
+  }, 60000, () => {}, {}, () => currentTime);
+
+  await service.refreshTickets();
+  currentTime += 2 * 60000 + 59000;
+  assert.equal(service.getLatestSnapshot().status, 'live');
+  currentTime += 2000;
+  assert.equal(service.getLatestSnapshot().status, 'stale');
+});
+
+test('flags snapshots that reached the Fiona filter limit', async () => {
+  const orders = [{ id: 'SO-1', orderStatus: 'OPEN' }, { id: 'SO-2', orderStatus: 'OPEN' }];
+  const client = {
+    config: { filterLimit: '2' },
+    fetchOrders: async () => ({ FilteredOrders: orders }),
+    getWorkOrders: (payload) => payload.FilteredOrders,
+  };
+  const service = createPollingService(client, 60000, () => {}, {});
+  const originalWarn = console.warn;
+  console.warn = () => {};
+  try {
+    assert.equal((await service.refreshTickets()).possiblyTruncated, true);
+    client.config.filterLimit = '3';
+    assert.equal((await service.refreshTickets()).possiblyTruncated, false);
+  } finally {
+    console.warn = originalWarn;
+  }
+});

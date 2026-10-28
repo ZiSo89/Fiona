@@ -20,3 +20,12 @@ export async function getStatsRepositories(storeId) {
   }
   return statsRepositories.get(storeId);
 }
+
+export async function closeStatsRepositories() {
+  const pending = [...statsRepositories.values()];
+  statsRepositories.clear();
+  await Promise.all(pending.map(async (entry) => {
+    const repositories = await entry.catch(() => null);
+    if (repositories) await Promise.all([repositories.closed.close(), repositories.observations.close()]);
+  }));
+}

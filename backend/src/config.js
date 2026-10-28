@@ -8,14 +8,16 @@ const backendDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url
 
 const parseList = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 
-const parseObject = (value) => {
+const parseObject = (value, name = 'JSON setting') => {
   if (!value) return {};
   try {
     const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed;
   } catch {
-    return {};
+    // Reported below.
   }
+  console.warn(`${name} must be a JSON object; the value is ignored.`);
+  return {};
 };
 
 export function buildFionaStores(environment = process.env) {
@@ -71,9 +73,9 @@ export const config = {
   password: process.env.FIONA_PASSWORD || '',
   appPassword: process.env.APP_PASSWORD || '',
   projectTrackerSessionSecret: process.env.PROJECT_TRACKER_SESSION_SECRET || process.env.APP_PASSWORD || '',
-  projectTrackerTeamPasswords: parseObject(process.env.PROJECT_TRACKER_TEAM_PASSWORDS),
+  projectTrackerTeamPasswords: parseObject(process.env.PROJECT_TRACKER_TEAM_PASSWORDS, 'PROJECT_TRACKER_TEAM_PASSWORDS'),
   projectTrackerAdminPassword: process.env.PROJECT_TRACKER_ADMIN_PASSWORD || '',
-  projectTrackerCategoryMap: parseObject(process.env.PROJECT_TRACKER_CATEGORY_MAP),
+  projectTrackerCategoryMap: parseObject(process.env.PROJECT_TRACKER_CATEGORY_MAP, 'PROJECT_TRACKER_CATEGORY_MAP'),
   projectTrackerSyncIntervalMs: Number(process.env.PROJECT_TRACKER_SYNC_INTERVAL_MS || 900000),
   projectTrackerLookbackDays: Number(process.env.PROJECT_TRACKER_LOOKBACK_DAYS || 14),
   basicAuth: process.env.FIONA_BASIC_AUTH || '',

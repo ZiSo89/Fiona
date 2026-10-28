@@ -49,6 +49,9 @@ export function createAuth(password, now = () => Date.now()) {
   }
 
   function recordFailure(ip) {
+    for (const [key, value] of failures) {
+      if (value.resetAt < now()) failures.delete(key);
+    }
     const entry = failures.get(ip);
     if (!entry || entry.resetAt < now()) failures.set(ip, { count: 1, resetAt: now() + FAILURE_WINDOW_MS });
     else entry.count += 1;
@@ -58,12 +61,12 @@ export function createAuth(password, now = () => Date.now()) {
     isAuthenticated,
     requireAuth(req, res, next) {
       if (OPEN_PATHS.has(req.path)) return next();
-      if (!password) return res.status(503).json({ success: false, message: 'FIONA_PASSWORD is not configured' });
+      if (!password) return res.status(503).json({ success: false, message: 'APP_PASSWORD is not configured' });
       if (!isAuthenticated(req)) return res.status(401).json({ success: false, message: 'Login required' });
       return next();
     },
     login(req, res) {
-      if (!password) return res.status(503).json({ success: false, message: 'FIONA_PASSWORD is not configured' });
+      if (!password) return res.status(503).json({ success: false, message: 'APP_PASSWORD is not configured' });
       if (tooManyFailures(req.ip)) {
         return res.status(429).json({ success: false, message: 'Πολλές αποτυχημένες προσπάθειες. Δοκίμασε αργότερα.' });
       }

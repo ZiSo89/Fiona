@@ -5,27 +5,35 @@ import { createTicketObservationRepository } from '../repositories/ticketObserva
 import { createClosedTicketRepository } from '../repositories/closedTicketRepository.js';
 import { createClosedTicketFinalizer } from './closedTicketFinalizer.js';
 
-export function createPollingService(client, pollIntervalMs, onTickets = () => {}, store = client.config || {}) {
+export function createPollingService(client, pollIntervalMs, onTickets = () => {}, store = client.config || {}, now = () => Date.now()) {
   const storeId = store.storeId || 'alexandroupoli';
   const storeName = store.storeName || 'Αλεξανδρούπολη';
+  // A live snapshot that missed two polls in a row is no longer trustworthy.
+  const maxLiveAgeMs = 2 * pollIntervalMs + 60 * 1000;
   const state = {
     tickets: [],
     lastUpdatedAt: null,
     lastAttemptAt: null,
     pollingInterval: null,
     refreshPromise: null,
+    observationPromise: null,
     error: null,
     status: 'idle',
+    possiblyTruncated: false,
   };
 
   function getLatestSnapshot() {
+    const expired = state.status === 'live' && state.lastUpdatedAt
+      && now() - Date.parse(state.lastUpdatedAt) > maxLiveAgeMs;
     return {
       storeId,
       storeName,
-      status: state.status,
+      status: expired ? 'stale' : state.status,
+      refreshing: Boolean(state.refreshPromise),
       lastUpdatedAt: state.lastUpdatedAt,
       lastAttemptAt: state.lastAttemptAt,
       totalTickets: state.tickets.length,
+      possiblyTruncated: state.possiblyTruncated,
       tickets: state.tickets,
       error: state.error,
     };
@@ -34,22 +42,31 @@ export function createPollingService(client, pollIntervalMs, onTickets = () => {
   function refreshTickets() {
     if (state.refreshPromise) return state.refreshPromise;
 
-    state.status = 'polling';
-    state.lastAttemptAt = new Date().toISOString();
+    // Keep the previous outcome visible while a refresh runs; only the first poll reports 'polling'.
+    if (state.status === 'idle') state.status = 'polling';
+    state.lastAttemptAt = new Date(now()).toISOString();
     state.refreshPromise = (async () => {
       try {
         const payload = await client.fetchOrders();
         const normalized = normalizeOrders(payload);
         const tickets = normalized.tickets.map((ticket) => ({ ...ticket, storeId, storeName }));
+        const limit = Number(client.config?.filterLimit);
+        const receivedOrders = typeof client.getWorkOrders === 'function'
+          ? client.getWorkOrders(payload).length
+          : tickets.length;
 
         state.tickets = tickets;
-        state.lastUpdatedAt = new Date().toISOString();
+        state.lastUpdatedAt = new Date(now()).toISOString();
         state.error = null;
         state.status = 'live';
+        state.possiblyTruncated = limit > 0 && receivedOrders >= limit;
+        if (state.possiblyTruncated) {
+          console.warn(`Fiona returned ${receivedOrders} open orders for ${storeId}, the FIONA_FILTER_LIMIT; some may be missing.`);
+        }
 
         try {
           const pending = onTickets(tickets, new Date());
-          Promise.resolve(pending).catch((observationError) => {
+          state.observationPromise = Promise.resolve(pending).catch((observationError) => {
             console.error('Ticket observation failed:', observationError?.message);
           });
         } catch (observationError) {
@@ -84,16 +101,23 @@ export function createPollingService(client, pollIntervalMs, onTickets = () => {
     state.pollingInterval = null;
   }
 
-  return { getLatestSnapshot, refreshTickets, startPolling, stopPolling };
+  async function idle() {
+    await state.refreshPromise;
+    await state.observationPromise;
+  }
+
+  return { getLatestSnapshot, refreshTickets, startPolling, stopPolling, idle };
 }
 
 const fionaClients = new Map();
+const storeRepositories = [];
 
 async function createStorePollingService(store) {
   const client = new FionaClient(store);
   fionaClients.set(store.storeId, client);
   const observations = await createTicketObservationRepository(config.closedTicketsDbPath, store.storeId);
   const repository = await createClosedTicketRepository(config.closedTicketsDbPath, store.storeId);
+  storeRepositories.push(observations, repository);
   const finalizer = createClosedTicketFinalizer({ client, repository });
   const recordObservations = async (tickets, observedAt) => {
     await observations.record(tickets, observedAt);
@@ -137,3 +161,5 @@ export const getAllLatestSnapshots = () => configuredStores.map((store) => getPo
 export const refreshAllTickets = async () => Promise.all(configuredStores.map((store) => refreshTickets(store.storeId)));
 export const startPolling = () => pollingServices.forEach((service) => service.startPolling());
 export const stopPolling = () => pollingServices.forEach((service) => service.stopPolling());
+export const waitForPollingIdle = () => Promise.all([...pollingServices.values()].map((service) => service.idle()));
+export const closePollingRepositories = () => Promise.all(storeRepositories.splice(0).map((repository) => repository.close()));

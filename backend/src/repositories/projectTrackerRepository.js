@@ -8,7 +8,6 @@ import {
   projectTrackerJobFromRow,
 } from '../services/projectTrackerCatalog.js';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
 const dayFormatter = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Europe/Athens',
   year: 'numeric',

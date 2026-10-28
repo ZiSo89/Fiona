@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Icon from './components/Icon.jsx';
 import CompleteView from './features/closed-tickets/CompleteView.jsx';
 import TicketCard from './features/tickets/TicketCard.jsx';
+import { formatDataAge } from './features/tickets/ticketFormatters.js';
 import { fallbackTickets } from './features/tickets/fallbackTickets.js';
 import { compareTickets, normalizeTicketForUi } from './features/tickets/ticketModel.js';
 import {
@@ -18,6 +19,11 @@ import {
 } from './features/tickets/ticketStorage.js';
 import { normalizeSearchText } from './shared/searchUtils.js';
 
+// Demo tickets look real (phones, addresses), so they are only shown while developing locally.
+const demoTickets = (storeId) => (import.meta.env.DEV && storeId === 'alexandroupoli'
+  ? fallbackTickets.map(normalizeTicketForUi)
+  : []);
+
 function App() {
   const [storeId, setStoreId] = useState(readSelectedStore);
   const [stores, setStores] = useState([
@@ -26,11 +32,12 @@ function App() {
     { storeId: 'orestiada', storeName: 'Ορεστιάδα', configured: false },
   ]);
   const [tickets, setTickets] = useState(() => readCachedTickets(readSelectedStore())
-    || (readSelectedStore() === 'alexandroupoli' ? fallbackTickets.map(normalizeTicketForUi) : []));
+    || demoTickets(readSelectedStore()));
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [possiblyTruncated, setPossiblyTruncated] = useState(false);
   const [activeFilter, setActiveFilter] = useState(readActiveFilter);
-  const [sourceMode, setSourceMode] = useState(() => readCachedTickets(readSelectedStore()) ? 'cached' : 'fallback');
+  const [sourceMode, setSourceMode] = useState(() => readCachedTickets(readSelectedStore()) ? 'cached' : demoTickets(readSelectedStore()).length ? 'fallback' : 'empty');
   const [showSearch, setShowSearch] = useState(false);
   const [teamFilter, setTeamFilter] = useState(() => localStorage.getItem('fiona-team-filter') || '');
   const [searchQuery, setSearchQuery] = useState('');
@@ -39,8 +46,21 @@ function App() {
   const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
-    const clock = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => window.clearInterval(clock);
+    // Countdowns show seconds, so tick every second, but only while the page is visible.
+    let clock = null;
+    const sync = () => {
+      window.clearInterval(clock);
+      clock = null;
+      if (document.visibilityState === 'hidden') return;
+      setNow(Date.now());
+      clock = window.setInterval(() => setNow(Date.now()), 1000);
+    };
+    sync();
+    document.addEventListener('visibilitychange', sync);
+    return () => {
+      window.clearInterval(clock);
+      document.removeEventListener('visibilitychange', sync);
+    };
   }, []);
 
   useEffect(() => {
@@ -100,8 +120,8 @@ function App() {
         if (!current) return;
         if (result?.status === 'error' && nextTickets.length === 0) {
           const cached = readCachedTickets(storeId);
-          setTickets(cached || (storeId === 'alexandroupoli' ? fallbackTickets.map(normalizeTicketForUi) : []));
-          setSourceMode(cached ? 'cached' : storeId === 'alexandroupoli' ? 'fallback' : 'empty');
+          setTickets(cached || demoTickets(storeId));
+          setSourceMode(cached ? 'cached' : demoTickets(storeId).length ? 'fallback' : 'empty');
           setLastUpdated(snapshot?.lastUpdatedAt ?? null);
           return;
         }
@@ -116,11 +136,12 @@ function App() {
           })));
         }
         setLastUpdated(snapshot?.lastUpdatedAt ?? null);
+        setPossiblyTruncated(Boolean(snapshot?.possiblyTruncated));
       } catch (error) {
         if (!current) return;
         const cached = readCachedTickets(storeId);
-        setSourceMode(cached ? 'cached' : storeId === 'alexandroupoli' ? 'fallback' : 'empty');
-        setTickets(cached || (storeId === 'alexandroupoli' ? fallbackTickets.map(normalizeTicketForUi) : []));
+        setSourceMode(cached ? 'cached' : demoTickets(storeId).length ? 'fallback' : 'empty');
+        setTickets(cached || demoTickets(storeId));
         console.warn('Using fallback dataset because the backend is unavailable:', error.message);
       } finally {
         if (current) setLoading(false);
@@ -163,9 +184,10 @@ function App() {
     setStoreId(value);
     window.localStorage.setItem(ACTIVE_STORE_KEY, value);
     const cached = readCachedTickets(value);
-    setTickets(cached || (value === 'alexandroupoli' ? fallbackTickets.map(normalizeTicketForUi) : []));
-    setSourceMode(cached ? 'cached' : value === 'alexandroupoli' ? 'fallback' : 'empty');
+    setTickets(cached || demoTickets(value));
+    setSourceMode(cached ? 'cached' : demoTickets(value).length ? 'fallback' : 'empty');
     setLastUpdated(null);
+    setPossiblyTruncated(false);
     setLoading(true);
   };
   const logout = async () => {
@@ -201,7 +223,8 @@ function App() {
         </div>
         {showSearch && <label className="search-wrap"><Icon name="search" /><input autoFocus value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={isComplete ? 'Αναζήτηση πελάτη, διεύθυνσης ή εισιτηρίου' : 'Αναζήτηση εισιτηρίου ή πελάτη'} list={isComplete ? 'closed-ticket-suggestions' : 'ticket-search-suggestions'} /></label>}
         {!isComplete && <datalist id="ticket-search-suggestions">{searchSuggestions.map((suggestion) => <option key={suggestion} value={suggestion} />)}</datalist>}
-        {!isComplete && <div className={`status-line ${sourceMode}`}><span className="status-dot" /><span>{loading ? 'Συγχρονισμός…' : sourceMode === 'live' ? 'Live' : sourceMode === 'stale' || sourceMode === 'cached' ? 'Stale / Cached' : 'Offline'} • {tickets.length} εισιτήρια{lastUpdated ? ` • ${new Date(lastUpdated).toLocaleTimeString('el-GR', { hourCycle: 'h23', hour: '2-digit', minute: '2-digit' })}` : ''}</span><span className="auto-label">auto 60s</span></div>}
+        {!isComplete && <div className={`status-line ${sourceMode}`}><span className="status-dot" /><span>{loading ? 'Συγχρονισμός…' : sourceMode === 'live' ? 'Live' : sourceMode === 'stale' || sourceMode === 'cached' ? 'Stale / Cached' : 'Offline'} • {tickets.length} εισιτήρια{lastUpdated ? ` • ${new Date(lastUpdated).toLocaleTimeString('el-GR', { hourCycle: 'h23', hour: '2-digit', minute: '2-digit' })}` : ''}{lastUpdated && formatDataAge(lastUpdated, now) ? ` (${formatDataAge(lastUpdated, now)})` : ''}</span><span className="auto-label">auto 60s</span></div>}
+        {!isComplete && possiblyTruncated && <p className="truncation-warning" role="status">Η Fiona επέστρεψε το μέγιστο πλήθος εισιτηρίων· ορισμένα μπορεί να λείπουν.</p>}
         <div className="scope-filters">
           <label className="scope-filter">
             <span>Κατάστημα</span>

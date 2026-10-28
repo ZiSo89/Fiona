@@ -64,6 +64,13 @@ function readCategoryFields(order, details, categoryMap) {
 const FTTH_PARTIAL_POINTS = 15;
 const CABLING_COMPLETED_POINTS = 50;
 const PROJECT_TRACKER_SCORING_RULE_VERSION = 4;
+const HOUR_MS = 60 * 60 * 1000;
+// How long a skipped order is not requested again: unfinished work can still complete, the rest cannot change.
+const SKIP_TTL_MS = {
+  notCompleted: HOUR_MS,
+  otherStore: 24 * HOUR_MS,
+  beforeCutover: 14 * 24 * HOUR_MS,
+};
 
 function readClosingCategory(order, details) {
   return fieldText(findOrderField(details, 'categoryId06') ?? order?.Categorization?.categoryId06);
@@ -103,8 +110,17 @@ export async function syncProjectTracker({
   maxDelayMs = config.fionaRequestMaxDelayMs,
   wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
   now = () => new Date(),
+  skipCache = new Map(),
 }) {
   const currentTime = now();
+  const currentMs = currentTime.getTime();
+  for (const [key, expiresAt] of skipCache) {
+    if (expiresAt <= currentMs) skipCache.delete(key);
+  }
+  const skip = (storeId, orderId, reason) => {
+    summary[reason] += 1;
+    skipCache.set(`${storeId}|${orderId}`, currentMs + SKIP_TTL_MS[reason]);
+  };
   const cutoverAt = await repository.ensureCutoverAt(currentTime);
   const remappedExisting = await repository.applyCategoryMap(categoryMap, currentTime.toISOString());
   const workDates = fionaDateRange(cutoverAt, currentTime, lookbackDays);
@@ -121,6 +137,7 @@ export async function syncProjectTracker({
     beforeCutover: 0,
     otherStore: 0,
     missingTeam: 0,
+    skippedRecently: 0,
     failed: 0,
   };
   const pause = () => wait(Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs);
@@ -235,6 +252,11 @@ export async function syncProjectTracker({
           continue;
         }
 
+        if (skipCache.has(`${store.storeId}|${orderId}`)) {
+          summary.skippedRecently += 1;
+          continue;
+        }
+
         let details;
         try {
           await pause();
@@ -248,18 +270,18 @@ export async function syncProjectTracker({
         if (serviceGroupMatch) {
           const serviceGroup = String(findOrderField(details, 'serviceGroup') ?? order?.serviceGroup ?? '').toUpperCase();
           if (!serviceGroup.includes(serviceGroupMatch)) {
-            summary.otherStore += 1;
+            skip(store.storeId, orderId, 'otherStore');
             continue;
           }
         }
 
         const completed = buildClosedTicketRecord(order, details, {}, null, currentTime);
         if (!completed) {
-          summary.notCompleted += 1;
+          skip(store.storeId, orderId, 'notCompleted');
           continue;
         }
         if (completed.closed_at < cutoverAt) {
-          summary.beforeCutover += 1;
+          skip(store.storeId, orderId, 'beforeCutover');
           continue;
         }
 
@@ -313,34 +335,49 @@ export function createProjectTrackerSync(options) {
   let interval = null;
   let currentRun = null;
   const intervalMs = options.intervalMs ?? 15 * 60 * 1000;
+  const skipCache = new Map();
+  const status = { lastStartedAt: null, lastCompletedAt: null, lastFailedAt: null, lastSummary: null };
 
   function syncOnce() {
     if (currentRun) return currentRun;
-    currentRun = syncProjectTracker(options).finally(() => { currentRun = null; });
+    status.lastStartedAt = new Date().toISOString();
+    currentRun = syncProjectTracker({ skipCache, ...options })
+      .then((summary) => {
+        status.lastCompletedAt = new Date().toISOString();
+        status.lastSummary = summary;
+        return summary;
+      }, (error) => {
+        status.lastFailedAt = new Date().toISOString();
+        throw error;
+      })
+      .finally(() => { currentRun = null; });
     return currentRun;
   }
 
+  const runAndLog = () => {
+    void syncOnce().then((summary) => {
+      console.info('Project tracker sync completed:', summary);
+    }).catch((error) => {
+      console.error('Project tracker sync failed:', error?.message);
+    });
+  };
+
   return {
     syncOnce,
+    getStatus: () => ({ ...status, running: Boolean(currentRun) }),
     start() {
       if (interval) return;
-      void syncOnce().then((summary) => {
-        console.info('Project tracker sync completed:', summary);
-      }).catch((error) => {
-        console.error('Project tracker sync failed:', error?.message);
-      });
-      interval = setInterval(() => {
-        void syncOnce().then((summary) => {
-          console.info('Project tracker sync completed:', summary);
-        }).catch((error) => {
-          console.error('Project tracker sync failed:', error?.message);
-        });
-      }, intervalMs);
+      runAndLog();
+      interval = setInterval(runAndLog, intervalMs);
       interval.unref?.();
     },
     stop() {
       if (interval) clearInterval(interval);
       interval = null;
+    },
+    // Resolves once any in-flight run settles, so shutdown does not close the database under it.
+    async idle() {
+      await currentRun?.catch(() => {});
     },
   };
 }
