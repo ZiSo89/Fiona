@@ -59,7 +59,7 @@ export async function createApp() {
   app.use((error, req, res, next) => {
     console.error('Request failed:', error.code || error.name);
     if (res.headersSent) return next(error);
-    return res.status(500).json({ success: false, message: 'Unable to access application data' });
+    return res.status(500).json({ success: false, message: 'Δεν ήταν δυνατή η πρόσβαση στα δεδομένα. Δοκίμασε ξανά.' });
   });
 
   return { app, projectTrackerRepository };

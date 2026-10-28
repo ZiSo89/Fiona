@@ -18,11 +18,18 @@ import {
   RefreshCw,
   Save,
   Search,
+  ShieldCheck,
   Sun,
+  Ticket,
   Trophy,
   X,
 } from 'lucide-react';
+import AdminOverview from './components/AdminOverview.jsx';
 import CategoryPicker from './components/CategoryPicker.jsx';
+import ConfirmDialog from './components/ConfirmDialog.jsx';
+import Modal from './components/Modal.jsx';
+import PointsGuide from './components/PointsGuide.jsx';
+import UpdateBanner from './components/UpdateBanner.jsx';
 import { categories, categoryLabel, pointsNote } from './categories.js';
 import {
   profileKey,
@@ -37,16 +44,22 @@ import {
   shiftMonth,
   calendarCells,
   formatDate,
+  formatTime,
   jobLabel,
   formatDateTime,
   trackerRequest,
   jobGreekLabel,
+  copyText,
+  WEEKDAY_LABELS,
 } from './trackerModel.js';
+
+const pointsLabel = (points) => `${points} ${points === 1 ? 'πόντος' : 'πόντοι'}`;
 
 function App() {
   const today = currentAthensDate();
   const [savedView] = useState(readTrackerView);
   const [profiles, setProfiles] = useState([]);
+  const [lastSyncAt, setLastSyncAt] = useState(null);
   const [selectedProfileKey, setSelectedProfileKey] = useState(savedView.profileKey);
   const [month, setMonth] = useState(savedView.month || currentAthensMonth());
   const [selectedDate, setSelectedDate] = useState(savedView.date || today);
@@ -56,12 +69,17 @@ function App() {
   const [refreshing, setRefreshing] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
   const lastMonthViewRef = useRef('');
+  const autoPickDayRef = useRef(false);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
   const [editor, setEditor] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [loginRole, setLoginRole] = useState('editor');
+  const [loginBusy, setLoginBusy] = useState(false);
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [confirmLockOpen, setConfirmLockOpen] = useState(false);
+  const [overview, setOverview] = useState({ month: '', teams: [], loading: false });
   const [drafts, setDrafts] = useState({});
   const [savingJobId, setSavingJobId] = useState('');
   const [savingMonthLock, setSavingMonthLock] = useState(false);
@@ -100,6 +118,7 @@ function App() {
         const data = await trackerRequest('/profiles');
         if (active) {
           setProfiles(data.profiles || []);
+          setLastSyncAt(data.lastSyncAt || null);
           setError('');
         }
       } catch (requestError) {
@@ -175,6 +194,50 @@ function App() {
     return () => { active = false; };
   }, [selectedKey, month, refreshTick]);
 
+  // After moving to another month, open the first day with work instead of an empty day.
+  useEffect(() => {
+    if (!autoPickDayRef.current || monthData?.profileKey !== selectedKey || monthData?.month !== month) return;
+    autoPickDayRef.current = false;
+    const days = monthData.days || [];
+    if (days.some((day) => day.date === selectedDate && day.jobCount)) return;
+    const firstWorkDay = days.find((day) => day.jobCount);
+    if (firstWorkDay) setSelectedDate(firstWorkDay.date);
+  }, [monthData, selectedKey, month, selectedDate]);
+
+  useEffect(() => {
+    if (editor?.role !== 'admin') {
+      setOverview({ month: '', teams: [], loading: false });
+      return undefined;
+    }
+    let active = true;
+    setOverview((current) => ({ ...current, loading: true }));
+    trackerRequest(`/admin/overview?${new URLSearchParams({ month })}`)
+      .then((data) => { if (active) setOverview({ month: data.month, teams: data.teams || [], loading: false }); })
+      .catch((requestError) => {
+        if (!active) return;
+        setOverview((current) => ({ ...current, loading: false }));
+        setError(requestError.message);
+      });
+    return () => { active = false; };
+  }, [editor, month, refreshTick]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => setNotice(''), 3000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  const hasUnsavedDrafts = Object.values(drafts).some((draft) => draft.categorySelected);
+  useEffect(() => {
+    if (!hasUnsavedDrafts) return undefined;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasUnsavedDrafts]);
+
   useEffect(() => {
     if (!selectedProfile || !selectedDate.startsWith(month)) {
       setSelectedDate(month === currentAthensMonth() ? today : `${month}-01`);
@@ -246,10 +309,18 @@ function App() {
     return () => { active = false; };
   }, [editorMatchesProfile, selectedKey, dayJobs]);
 
+  const openLogin = (role) => {
+    setLoginError('');
+    setPassword('');
+    setLoginRole(role);
+    setLoginOpen(true);
+  };
+
   const handleLogin = async (event) => {
     event.preventDefault();
-    if (!selectedProfile) return;
+    if (!selectedProfile || loginBusy) return;
     setLoginError('');
+    setLoginBusy(true);
     try {
       const data = await trackerRequest('/login', {
         method: 'POST',
@@ -263,14 +334,19 @@ function App() {
       setEditor(data.editor);
       setLoginOpen(false);
       setPassword('');
+      setNotice(data.editor?.role === 'admin' ? 'Συνδέθηκες ως διαχειριστής.' : `Συνδέθηκες ως ${selectedProfile.teamName}.`);
     } catch (requestError) {
       setLoginError(requestError.message);
+    } finally {
+      setLoginBusy(false);
     }
   };
 
   const handleLogout = async () => {
+    if (hasUnsavedDrafts && !window.confirm('Υπάρχουν διορθώσεις που δεν αποθηκεύτηκαν. Αποσύνδεση;')) return;
     await trackerRequest('/logout', { method: 'POST' }).catch(() => {});
     setEditor(null);
+    setDrafts({});
     setJobDetails({});
     setLoadingJobDetails({});
   };
@@ -291,9 +367,12 @@ function App() {
       setMonthData((current) => current && current.profileKey === selectedKey && current.month === month
         ? { ...current, paymentLock: data.paymentLock }
         : current);
+      setConfirmLockOpen(false);
+      setNotice(data.paymentLock?.locked ? 'Ο μήνας εγκρίθηκε για πληρωμή.' : 'Ο μήνας ξεκλειδώθηκε.');
       setRefreshTick((tick) => tick + 1);
       setError('');
     } catch (requestError) {
+      setConfirmLockOpen(false);
       setError(requestError.message);
     } finally {
       setSavingMonthLock(false);
@@ -326,6 +405,7 @@ function App() {
       });
       setPickerJobId('');
       scrollToJob(key);
+      setNotice(`Αποθηκεύτηκε: ${categoryLabel(data.job.categoryId, data.job.categoryName)} · ${pointsLabel(data.job.points)}`);
       setRefreshTick((tick) => tick + 1);
     } catch (requestError) {
       setError(requestError.message);
@@ -334,13 +414,43 @@ function App() {
     }
   };
 
+  const cancelCorrection = (key) => {
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    setPickerJobId('');
+    scrollToJob(key);
+  };
+
+  const changeMonth = (offset) => {
+    const next = shiftMonth(month, offset);
+    autoPickDayRef.current = true;
+    setMonth(next);
+    setSelectedDate(next === currentAthensMonth() ? today : `${next}-01`);
+  };
+
+  const selectTeam = (team) => {
+    setSelectedProfileKey(profileKey(team));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const goToFirstPendingDay = () => {
+    const pendingDay = (liveMonthData?.days || []).find((day) => day.pendingCount);
+    if (pendingDay) {
+      setSelectedDate(pendingDay.date);
+      setDayFilter('all');
+    }
+  };
+
   const copyOrderCode = async (jobId, code) => {
     try {
-      await navigator.clipboard.writeText(code);
+      await copyText(code);
       setCopiedJobId(jobId);
       setTimeout(() => setCopiedJobId((current) => (current === jobId ? '' : current)), 1500);
     } catch {
-      setError('Η αντιγραφή απέτυχε.');
+      setError('Η αντιγραφή απέτυχε. Κράτησε τον κωδικό χειροκίνητα.');
     }
   };
 
@@ -372,15 +482,20 @@ function App() {
 
   return (
     <main className="app-shell">
+      <UpdateBanner />
       <header className="topbar">
-        <a className="brand" href="/tracker/" aria-label="Fiona Team Points home">
+        <a className="brand" href="/tracker/" aria-label="Πόντοι συνεργείων Fiona, αρχική">
           <span className="brand-mark"><CalendarDays size={17} strokeWidth={2.2} /></span>
           <span className="brand-copy">
-            <span className="brand-kicker">FIONA / FIELD WORK</span>
-            <span className="brand-title">Team points</span>
+            <span className="brand-kicker">FIONA · ΠΕΔΙΟ</span>
+            <span className="brand-title">Πόντοι συνεργείων</span>
           </span>
         </a>
         <div className="topbar-controls">
+          <a className="toolbar-button app-switch" href="/app/" title="Εισιτήρια Fiona">
+            <Ticket size={16} />
+            <span>Εισιτήρια</span>
+          </a>
           {selectedProfile && (
             <label className="profile-select-wrap">
               <span>ΣΥΝΕΡΓΕΙΟ</span>
@@ -389,24 +504,34 @@ function App() {
                 value={selectedKey}
                 onChange={(event) => setSelectedProfileKey(event.target.value)}
               >
-                {profiles.map((profile) => (
-                  <option key={profileKey(profile)} value={profileKey(profile)}>
-                    {profile.storeName} · {profile.teamName}
-                  </option>
+                {[...new Set(profiles.map((profile) => profile.storeName))].map((storeName) => (
+                  <optgroup key={storeName} label={storeName}>
+                    {profiles.filter((profile) => profile.storeName === storeName).map((profile) => (
+                      <option key={profileKey(profile)} value={profileKey(profile)}>
+                        {profile.teamName}{profile.unmappedCount ? ` · ${profile.unmappedCount} ${profile.unmappedCount === 1 ? 'εκκρεμεί' : 'εκκρεμούν'}` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
             </label>
           )}
-          {editorMatchesProfile ? (
+          {editor ? (
             <button className="toolbar-button editor-on" type="button" onClick={handleLogout} title="Αποσύνδεση">
               <LogOut size={16} />
               <span>Αποσύνδεση</span>
             </button>
           ) : (
-            <button className="toolbar-button" type="button" onClick={() => { setLoginError(''); setLoginRole('editor'); setLoginOpen(true); }} disabled={!selectedProfile}>
-              <LockKeyhole size={16} />
-              <span>Σύνδεση</span>
-            </button>
+            <>
+              <button className="toolbar-button" type="button" onClick={() => openLogin('editor')} disabled={!selectedProfile}>
+                <LockKeyhole size={16} />
+                <span>Σύνδεση</span>
+              </button>
+              <button className="toolbar-button admin-login" type="button" onClick={() => openLogin('admin')} disabled={!selectedProfile}>
+                <ShieldCheck size={16} />
+                <span>Διαχειριστής</span>
+              </button>
+            </>
           )}
           <button className="icon-button theme-toggle" type="button" onClick={() => setDarkMode((value) => !value)} aria-label={darkMode ? 'Ενεργοποίηση φωτεινού θέματος' : 'Ενεργοποίηση σκοτεινού θέματος'} title="Αλλαγή θέματος">
             {darkMode ? <Sun size={17} /> : <Moon size={17} />}
@@ -417,8 +542,10 @@ function App() {
       <div className="page-heading">
         <div>
           <p className="eyebrow">ΗΜΕΡΟΛΟΓΙΟ ΑΠΟΔΟΣΗΣ</p>
-          <h1>{selectedProfile?.teamName || 'Ομάδες Fiona'}</h1>
-          <p className="heading-subtitle">{selectedProfile?.storeName || 'Fiona'}{selectedProfile ? ` · ${selectedProfile.jobCount} εργασίες` : ''}</p>
+          <h1>{selectedProfile?.teamName || 'Συνεργεία Fiona'}</h1>
+          <p className="heading-subtitle">
+            {selectedProfile?.storeName || 'Fiona'}{selectedProfile ? ` · ${selectedProfile.jobCount} εργασίες` : ''}
+          </p>
         </div>
         <button className="icon-button refresh-button" type="button" onClick={() => setRefreshTick((tick) => tick + 1)} aria-label="Ανανέωση δεδομένων" title="Ανανέωση">
           <RefreshCw size={17} className={refreshing ? 'spin' : ''} />
@@ -426,11 +553,33 @@ function App() {
       </div>
 
       {error && (
-        <div className="notice notice-error" role="status">
+        <div className="notice notice-error" role="alert">
           <CircleAlert size={17} />
           <span>{error}</span>
           <button className="notice-dismiss" type="button" onClick={() => setError('')} aria-label="Κλείσιμο"><X size={15} /></button>
         </div>
+      )}
+      {notice && (
+        <div className="notice notice-success" role="status">
+          <Check size={17} />
+          <span>{notice}</span>
+        </div>
+      )}
+      {selectedProfile?.unmappedCount > 0 && editorMatchesProfile && (
+        <div className="notice notice-pending">
+          <CircleAlert size={17} />
+          <span>{selectedProfile.unmappedCount} {selectedProfile.unmappedCount === 1 ? 'εργασία περιμένει' : 'εργασίες περιμένουν'} κατηγορία. Οι ημέρες με εκκρεμότητα έχουν πορτοκαλί σήμανση στο ημερολόγιο.</span>
+        </div>
+      )}
+
+      {editorIsAdmin && (
+        <AdminOverview
+          month={month}
+          monthTitle={getMonthTitle(month)}
+          teams={overview.month === month ? overview.teams : []}
+          loading={overview.loading}
+          onSelectTeam={selectTeam}
+        />
       )}
 
       {loading ? (
@@ -447,9 +596,9 @@ function App() {
             <div className="calendar-panel">
               <div className="month-toolbar">
                 <div className="month-navigation">
-                  <button className="icon-button month-arrow" type="button" onClick={() => { const next = shiftMonth(month, -1); setMonth(next); setSelectedDate(`${next}-01`); }} aria-label="Προηγούμενος μήνας"><ArrowLeft size={17} /></button>
+                  <button className="icon-button month-arrow" type="button" onClick={() => changeMonth(-1)} aria-label="Προηγούμενος μήνας"><ArrowLeft size={17} /></button>
                   <h2>{getMonthTitle(month)}</h2>
-                  <button className="icon-button month-arrow" type="button" onClick={() => { const next = shiftMonth(month, 1); setMonth(next); setSelectedDate(`${next}-01`); }} aria-label="Επόμενος μήνας"><ArrowRight size={17} /></button>
+                  <button className="icon-button month-arrow" type="button" onClick={() => changeMonth(1)} aria-label="Επόμενος μήνας"><ArrowRight size={17} /></button>
                 </div>
                 <div className="month-summary-actions">
                   {monthLocked && (
@@ -460,21 +609,21 @@ function App() {
                       className={`month-lock-button${monthLocked ? ' is-locked' : ''}`}
                       type="button"
                       disabled={savingMonthLock || !monthLockMatchesView}
-                      onClick={() => void updateMonthLock()}
+                      onClick={() => setConfirmLockOpen(true)}
                     >
                       {savingMonthLock ? <RefreshCw size={14} className="spin" /> : <LockKeyhole size={14} />}
                       {monthLocked ? 'Ξεκλείδωμα' : 'Έγκριση πληρωμής'}
                     </button>
                   )}
                   <div className="month-points" aria-label={`${liveMonthTotal} συνολικοί πόντοι`}>
-                    <strong>{liveMonthTotal}</strong><span>pts</span>
+                    <strong>{liveMonthTotal}</strong><span>πόντοι</span>
                   </div>
                 </div>
               </div>
 
               <div className="calendar-grid" role="grid" aria-label={getMonthTitle(month)}>
                 <div className="weekday-row" role="row">
-                  {['ΚΥΡ', 'ΔΕΥ', 'ΤΡΙ', 'ΤΕΤ', 'ΠΕΜ', 'ΠΑΡ', 'ΣΑΒ'].map((weekday) => <span role="columnheader" key={weekday}>{weekday}</span>)}
+                  {WEEKDAY_LABELS.map((weekday) => <span role="columnheader" key={weekday}>{weekday}</span>)}
                 </div>
                 <div className="calendar-weeks">
                   {weekRows.map((week, weekIndex) => (
@@ -485,16 +634,17 @@ function App() {
                         const selected = selectedDate === date;
                         return (
                           <button
-                            className={`calendar-day${selected ? ' selected' : ''}${date === today ? ' today' : ''}${day?.jobCount ? ' has-work' : ''}`}
+                            className={`calendar-day${selected ? ' selected' : ''}${date === today ? ' today' : ''}${day?.jobCount ? ' has-work' : ''}${day?.pendingCount ? ' has-pending' : ''}`}
                             type="button"
                             role="gridcell"
                             aria-selected={selected}
-                            aria-label={`${formatDate(date)}${day?.jobCount ? `, ${day.jobCount} εργασίες, ${day.points} πόντοι` : ''}`}
+                            aria-label={`${formatDate(date)}${day?.jobCount ? `, ${day.jobCount} εργασίες, ${day.points} πόντοι` : ''}${day?.pendingCount ? `, ${day.pendingCount} ${day.pendingCount === 1 ? 'εκκρεμεί' : 'εκκρεμούν'}` : ''}`}
                             key={date}
                             onClick={() => setSelectedDate(date)}
                           >
                             <span className="day-number">{Number(date.slice(-2))}</span>
-                            {day?.jobCount ? <span className="day-points">{day.points} pts</span> : <span className="day-empty-mark" />}
+                            {day?.jobCount ? <span className="day-points">{day.points} π.</span> : <span className="day-empty-mark" />}
+                            {day?.pendingCount ? <span className="day-pending-mark" aria-hidden="true" /> : null}
                           </button>
                         );
                       })}
@@ -503,8 +653,9 @@ function App() {
                 </div>
               </div>
               <div className="calendar-footer">
-                <span><i className="legend-dot" /> Ημέρα με ολοκληρωμένες εργασίες</span>
-                <span className="live-state"><span className="live-dot" /> Ενημέρωση σε πραγματικό χρόνο</span>
+                <span><i className="legend-dot" /> Ημέρα με εργασίες</span>
+                <span><i className="legend-dot legend-pending" /> Εκκρεμεί κατηγορία</span>
+                <span className="live-state"><span className="live-dot" /> {lastSyncAt ? `Τελευταίος συγχρονισμός Fiona: ${formatTime(lastSyncAt)}` : 'Αναμονή πρώτου συγχρονισμού Fiona'}</span>
               </div>
             </div>
 
@@ -514,7 +665,7 @@ function App() {
                   <p className="eyebrow">{selectedDate === today ? 'ΣΗΜΕΡΑ' : 'ΗΜΕΡΑ'}</p>
                   <h2>{formatDate(selectedDate)}</h2>
                 </div>
-                <span className="day-total"><Trophy size={16} />{selectedDay.points}<small>pts</small></span>
+                <span className="day-total"><Trophy size={16} />{selectedDay.points}<small>πόντοι</small></span>
               </div>
               {dayJobs.length > 0 && (
                 <div className="day-toolbar">
@@ -549,7 +700,7 @@ function App() {
                       <div className="job-category-line">
                         <span className={`category-marker ${job.mapped ? 'mapped' : 'unmapped'}`} />
                         <h3>{jobLabel(job)}</h3>
-                        {job.mapped ? <span className="job-points">+{job.points} pts</span> : <span className="pending-label">Εκκρεμεί</span>}
+                        {job.mapped ? <span className="job-points">+{pointsLabel(job.points)}</span> : <span className="pending-label">Εκκρεμεί</span>}
                       </div>
                       {jobGreekLabel(job) && <p className="job-greek-label">{jobGreekLabel(job)}</p>}
                       {pointsNote(job) && <p className="points-note">{pointsNote(job)}</p>}
@@ -654,10 +805,18 @@ function App() {
                                   }}
                                 />
                               )}
-                            <button className={`save-correction${isDirty ? ' needs-save' : ''}`} type="button" disabled={!isDirty || savingJobId === key} onClick={() => void saveCorrection(job)}>
-                              {savingJobId === key ? <RefreshCw size={15} className="spin" /> : <Save size={15} />}
-                              <span>Αποθήκευση</span>
-                            </button>
+                            <div className="correction-actions">
+                              {isDirty && (
+                                <button className="cancel-correction" type="button" disabled={savingJobId === key} onClick={() => cancelCorrection(key)}>
+                                  <X size={15} />
+                                  <span>Ακύρωση</span>
+                                </button>
+                              )}
+                              <button className={`save-correction${isDirty ? ' needs-save' : ''}`} type="button" disabled={!isDirty || savingJobId === key} onClick={() => void saveCorrection(job)}>
+                                {savingJobId === key ? <RefreshCw size={15} className="spin" /> : <Save size={15} />}
+                                <span>Αποθήκευση</span>
+                              </button>
+                            </div>
                           </div>
                           ) : canEditCorrections ? (
                             <div className="job-card-footer">
@@ -687,7 +846,7 @@ function App() {
               </div>
               <div className="day-panel-footer">
                 <span>Σύνολο εργασιών ημέρας: <strong>{selectedDay.jobCount}</strong></span>
-                <span>Καθαροί πόντοι: <strong className="net-points">{selectedDay.points} pts</strong></span>
+                <span>Πόντοι ημέρας: <strong className="net-points">{pointsLabel(selectedDay.points)}</strong></span>
               </div>
             </section>
           </section>
@@ -698,58 +857,80 @@ function App() {
                 <p className="eyebrow">ΑΝΑ ΚΑΤΗΓΟΡΙΑ</p>
                 <h2 id="summary-title">Μηνιαία σύνοψη</h2>
               </div>
-              <div className="summary-total"><strong>{liveMonthTotal}</strong><span>pts</span></div>
+              <div className="summary-total"><strong>{liveMonthTotal}</strong><span>πόντοι</span></div>
             </div>
             {liveMonthData?.categories?.length ? (
               <div className="summary-list">
-                {[...liveMonthData.categories].sort((a, b) => b.jobCount - a.jobCount || b.points - a.points).map((entry) => (
-                  <div className={`summary-row${entry.mapped ? '' : ' is-pending'}`} key={entry.categoryId || 'unmapped'}>
-                    <span className="category-marker" />
-                    <span className="summary-category">{categoryLabel(entry.categoryId, entry.categoryName)}</span>
-                    <span className="summary-count">{entry.jobCount} {entry.jobCount === 1 ? 'εργασία' : 'εργασίες'}</span>
-                    <strong>{entry.points} pts</strong>
-                  </div>
-                ))}
+                {[...liveMonthData.categories].sort((a, b) => b.jobCount - a.jobCount || b.points - a.points).map((entry) => {
+                  const content = (
+                    <>
+                      <span className="category-marker" />
+                      <span className="summary-category">{categoryLabel(entry.categoryId, entry.categoryName)}</span>
+                      <span className="summary-count">{entry.jobCount} {entry.jobCount === 1 ? 'εργασία' : 'εργασίες'}</span>
+                      <strong>{pointsLabel(entry.points)}</strong>
+                    </>
+                  );
+                  return entry.mapped ? (
+                    <div className="summary-row" key={entry.categoryId}>{content}</div>
+                  ) : (
+                    <button type="button" className="summary-row is-pending" key="unmapped" onClick={goToFirstPendingDay} title="Μετάβαση στην πρώτη ημέρα με εκκρεμότητα">
+                      {content}
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <p className="summary-empty">Δεν έχουν καταγραφεί εργασίες για αυτόν τον μήνα.</p>
             )}
+            <PointsGuide />
           </section>
         </>
       )}
 
+      {confirmLockOpen && selectedProfile && (
+        <ConfirmDialog
+          title={monthLocked ? 'Ξεκλείδωμα μήνα' : 'Έγκριση πληρωμής'}
+          message={monthLocked
+            ? `Μήνας: ${getMonthTitle(month)} · Συνεργείο: ${selectedProfile.teamName}. Μετά το ξεκλείδωμα οι τεχνικοί μπορούν ξανά να κάνουν διορθώσεις.`
+            : `Μήνας: ${getMonthTitle(month)} · Συνεργείο: ${selectedProfile.teamName} · Σύνολο: ${pointsLabel(liveMonthTotal)}. Μετά την έγκριση οι τεχνικοί δεν μπορούν να κάνουν διορθώσεις.`}
+          confirmLabel={monthLocked ? 'Ξεκλείδωμα' : 'Έγκριση'}
+          busy={savingMonthLock}
+          onConfirm={() => void updateMonthLock()}
+          onCancel={() => setConfirmLockOpen(false)}
+        />
+      )}
+
       {loginOpen && selectedProfile && (
-        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setLoginOpen(false); }}>
-          <section className="login-modal" role="dialog" aria-modal="true" aria-labelledby="login-title">
-            <div className="modal-heading">
-              <span className="modal-icon"><LockKeyhole size={19} /></span>
-              <button className="icon-button close-modal" type="button" onClick={() => setLoginOpen(false)} aria-label="Κλείσιμο"><X size={18} /></button>
-            </div>
-            <h2 id="login-title">Σύνδεση</h2>
-            <p>{selectedProfile.storeName} · {selectedProfile.teamName}</p>
-            <form onSubmit={handleLogin}>
-              <label className="password-label" htmlFor="login-role">Τύπος χρήστη</label>
-              <select id="login-role" value={loginRole} onChange={(event) => setLoginRole(event.target.value)}>
-                <option value="editor">Τεχνικός / συνεργείο</option>
-                <option value="admin">Διαχειριστής</option>
-              </select>
-              <label className="password-label" htmlFor="team-password">
-                {loginRole === 'admin' ? 'Κωδικός admin' : 'Κωδικός συνεργείου'}
-              </label>
-              <input
-                id="team-password"
-                type="password"
-                autoComplete="current-password"
-                autoFocus
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                required
-              />
-              {loginError && <p className="login-error" role="alert">{loginError}</p>}
-              <button className="login-submit" type="submit"><Check size={16} /> Σύνδεση</button>
-            </form>
-          </section>
-        </div>
+        <Modal labelledBy="login-title" onClose={() => { if (!loginBusy) setLoginOpen(false); }}>
+          <div className="modal-heading">
+            <span className="modal-icon">{loginRole === 'admin' ? <ShieldCheck size={19} /> : <LockKeyhole size={19} />}</span>
+            <button className="icon-button close-modal" type="button" onClick={() => setLoginOpen(false)} disabled={loginBusy} aria-label="Κλείσιμο"><X size={18} /></button>
+          </div>
+          <h2 id="login-title">{loginRole === 'admin' ? 'Σύνδεση διαχειριστή' : 'Σύνδεση συνεργείου'}</h2>
+          <p>
+            {loginRole === 'admin'
+              ? 'Ο διαχειριστής βλέπει όλα τα συνεργεία, διορθώνει και εγκρίνει πληρωμές.'
+              : `${selectedProfile.storeName} · ${selectedProfile.teamName}. Αν δεν είναι το δικό σου συνεργείο, κλείσε και διάλεξέ το από τη λίστα «Συνεργείο».`}
+          </p>
+          <form onSubmit={handleLogin}>
+            <label className="password-label" htmlFor="team-password">
+              {loginRole === 'admin' ? 'Κωδικός διαχειριστή' : 'Κωδικός συνεργείου'}
+            </label>
+            <input
+              id="team-password"
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+            {loginError && <p className="login-error" role="alert">{loginError}</p>}
+            <button className="login-submit" type="submit" disabled={loginBusy}>
+              {loginBusy ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />} {loginBusy ? 'Σύνδεση…' : 'Σύνδεση'}
+            </button>
+          </form>
+        </Modal>
       )}
     </main>
   );

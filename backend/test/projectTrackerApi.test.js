@@ -210,3 +210,35 @@ test('editor-only details endpoint rejects public and cross-team reads', async (
     assert.equal(wrongTeam.status, 403);
   });
 });
+test('the admin overview lists every team with points, pending jobs and lock state', async () => {
+  await withApi(async (url) => {
+    const anonymous = await fetch(`${url}/api/tracker/admin/overview?month=2026-10`);
+    assert.equal(anonymous.status, 401);
+
+    const editorLogin = await fetch(`${url}/api/tracker/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ storeId: 'alexandroupoli', teamName: 'Team One', password: 'team-secret' }),
+    });
+    const editorCookie = editorLogin.headers.get('set-cookie').split(';')[0];
+    assert.equal((await fetch(`${url}/api/tracker/admin/overview?month=2026-10`, { headers: { cookie: editorCookie } })).status, 403);
+
+    const adminLogin = await fetch(`${url}/api/tracker/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ role: 'admin', password: 'admin-secret' }),
+    });
+    const cookie = adminLogin.headers.get('set-cookie').split(';')[0];
+    assert.equal((await fetch(`${url}/api/tracker/admin/overview?month=bad`, { headers: { cookie } })).status, 400);
+    const overview = await (await fetch(`${url}/api/tracker/admin/overview?month=2026-10`, { headers: { cookie } })).json();
+    assert.deepEqual(overview.teams, [{
+      storeId: 'alexandroupoli',
+      storeName: 'Alexandroupoli',
+      teamName: 'Team One',
+      jobCount: 1,
+      points: 50,
+      pendingCount: 0,
+      paymentLock: { locked: false, changedAt: null },
+    }]);
+  });
+});

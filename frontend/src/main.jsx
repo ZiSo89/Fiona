@@ -2,9 +2,19 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import AuthGate from './features/auth/AuthGate.jsx';
+import { applyTheme, readStoredTheme } from './shared/theme.js';
 import './styles.css';
 
+applyTheme(readStoredTheme());
+
 if ('serviceWorker' in navigator) {
+  // A controller change on a page that already had one means a newer version took over.
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  if (!import.meta.env.DEV) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController) window.dispatchEvent(new Event('app-update-available'));
+    });
+  }
   window.addEventListener('load', () => {
     const appScope = new URL(import.meta.env.BASE_URL, window.location.origin).href;
 
@@ -41,6 +51,9 @@ if ('serviceWorker' in navigator) {
       .then(() => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, {
         scope: import.meta.env.BASE_URL,
       }))
+      .then((registration) => {
+        window.setInterval(() => { void registration.update().catch(() => {}); }, 60 * 60 * 1000);
+      })
       .catch((error) => {
         console.warn('Service worker registration failed:', error);
       });

@@ -1,4 +1,5 @@
 import { normalizeTicketForUi } from './ticketModel.js';
+import { TICKET_CHANGES_KEY_PREFIX } from './ticketChanges.js';
 
 export const FILTERS = ['ALL', 'OPEN', 'TO CALL', 'CALL LATER', 'APPOINTMENT', 'COMPLETE'];
 export const ACTIVE_FILTER_KEY = 'fiona-active-filter';
@@ -57,7 +58,7 @@ export function clearCachedTickets() {
   const storage = window.localStorage;
   for (let index = storage.length - 1; index >= 0; index -= 1) {
     const key = storage.key(index);
-    if (key?.startsWith(`${CACHE_KEY_PREFIX}:`) || key === LEGACY_CACHE_KEY) {
+    if (key?.startsWith(`${CACHE_KEY_PREFIX}:`) || key?.startsWith(`${TICKET_CHANGES_KEY_PREFIX}:`) || key === LEGACY_CACHE_KEY) {
       storage.removeItem(key);
     }
   }

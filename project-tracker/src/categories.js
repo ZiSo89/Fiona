@@ -26,7 +26,7 @@ export const categories = [
   { id: 'dth_tv_impairment', label: 'Βλάβη Δορυφορικής', source: 'On-Site Support DTH TV', points: 18, group: 'impairment', Icon: Wrench },
   { id: 'copper_installation', label: 'Εγκατάσταση χαλκού', source: 'NGA Activation, CPE Installation NGA / LLU', points: 15, group: 'installation', Icon: Router },
   { id: 'copper_impairment', label: 'Βλάβη χαλκού', source: 'On-Site Support NGA / LLU, SI Bridging, CO Visit', points: 15, group: 'impairment', Icon: Wrench },
-  { id: 'combined_work', label: 'Συνδιαστικό', source: 'Combined Wind-AP / OTE-WIND', points: 15, group: 'other', Icon: Package },
+  { id: 'combined_work', label: 'Συνδυαστικό', source: 'Combined Wind-AP / OTE-WIND', points: 15, group: 'other', Icon: Package },
   { id: 'other_works', label: 'Άλλες εργασίες', source: 'Λοιπές εργασίες', points: 5, group: 'other', Icon: Package },
   { id: 'cabling_repair', label: 'Καλωδίωση / νέα εγκατάσταση', source: 'Cabling repair and maintenance', points: 15, group: 'other', Icon: Cable },
   { id: 'double_team', label: 'Διπλό Συνεργείο', source: 'Μόνο χειροκίνητη επιλογή', points: 100, group: 'other', Icon: Copy },
