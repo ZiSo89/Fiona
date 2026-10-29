@@ -72,6 +72,11 @@ test('real MySQL/MariaDB storage and SQLite migration', { skip: process.env.RUN_
       assert.equal((await tracker.getAudit('alexandroupoli', 'order-1')).length, 1);
       assert.equal((await tracker.getEditorDetailsCache('alexandroupoli', 'order-1')).commentText, 'Stored comment');
       assert.equal((await observations.callLaterHistory('order-1')).length, 1);
+      const monitoring = await observations.callLaterMonitoringReport();
+      assert.equal(monitoring.summary.captures, 1);
+      assert.equal(monitoring.summary.tickets, 1);
+      assert.equal(monitoring.observations.length, 1);
+      assert.ok(monitoring.expiresAt >= '2026-11-05T08:43:00.000Z');
       await assert.rejects(() => tracker.correctJob({
         storeId: 'alexandroupoli', orderId: 'order-1', teamName: 'Team One',
         categoryId: 'dth_tv_impairment', changedAt: new Date().toISOString(),
