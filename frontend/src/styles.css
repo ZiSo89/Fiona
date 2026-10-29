@@ -944,5 +944,3 @@ button.done-card:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px
 
 .update-banner { position: fixed; z-index: 30; right: 12px; bottom: calc(84px + env(safe-area-inset-bottom)); left: 12px; display: flex; max-width: 520px; align-items: center; justify-content: space-between; gap: 12px; margin: 0 auto; padding: 10px 12px; border-radius: 10px; background: var(--blue); color: #fff; font-size: 0.85rem; }
 .update-banner button { min-height: 40px; padding: 0 14px; border: 0; border-radius: 8px; background: #fff; color: #0c4a6e; font-weight: 700; cursor: pointer; }
-
-.auth-loading { color: var(--muted); font-size: 0.9rem; }

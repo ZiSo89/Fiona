@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import StartupScreen from '../../components/StartupScreen.jsx';
 import { clearCachedTickets, pruneCachedTickets } from '../tickets/ticketStorage.js';
 
 const originalFetch = window.fetch.bind(window);
@@ -71,7 +72,7 @@ export default function AuthGate({ children }) {
   }
 
   if (state === 'checking') {
-    return <main className="login-screen"><p className="auth-loading" role="status">Φόρτωση…</p></main>;
+    return <StartupScreen />;
   }
   if (state === 'in') return children;
 
