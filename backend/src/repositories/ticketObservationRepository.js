@@ -4,6 +4,7 @@ import { backupBeforeStoreMigration } from './sqliteMigrationBackup.js';
 
 // A ticket counts as called once Fiona moves it to one of these statuses.
 const CONTACT_STATUSES = ['CALL LATER', 'APPOINTMENT'];
+const CALL_LATER_MONITORING_UNTIL = '2026-11-05T08:43:00.000Z';
 
 export async function createTicketObservationRepository(dbPath = config.closedTicketsDbPath, storeId = 'alexandroupoli', client = config.dbClient) {
   const database = await openDatabase(dbPath, client);
@@ -46,10 +47,15 @@ export async function createTicketObservationRepository(dbPath = config.closedTi
     await database.prepare(`
     INSERT OR IGNORE INTO call_later_monitoring (id, expires_at)
     VALUES (1, ?)
-  `).run(new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
-    const callLaterMonitoringExpiresAt = (await database.prepare(
+  `).run(CALL_LATER_MONITORING_UNTIL);
+    // Extend existing installations once, without restarting the clock on each deploy.
+    await database.prepare(`
+    UPDATE call_later_monitoring SET expires_at = ?
+    WHERE id = 1 AND expires_at < ?
+  `).run(CALL_LATER_MONITORING_UNTIL, CALL_LATER_MONITORING_UNTIL);
+    const monitoringExpiryStatement = database.prepare(
       'SELECT expires_at FROM call_later_monitoring WHERE id = 1'
-    ).get()).expires_at;
+    );
 
     if (database.dialect === 'sqlite') {
       const existingColumns = await database.prepare('PRAGMA table_info(ticket_status_observations)').all();
@@ -122,6 +128,7 @@ export async function createTicketObservationRepository(dbPath = config.closedTi
   `);
 
     const insertMany = database.transaction(async (rows) => {
+      const { expires_at: callLaterMonitoringExpiresAt } = await monitoringExpiryStatement.get();
       let inserted = 0;
       for (const row of rows) {
         inserted += (await insertStatement.run(row)).changes;
@@ -187,8 +194,45 @@ export async function createTicketObservationRepository(dbPath = config.closedTi
       async callLaterHistory(orderId, requestedStoreId = storeId) {
         return await callLaterHistoryStatement.all(String(orderId), requestedStoreId, requestedStoreId);
       },
-      callLaterMonitoringExpiresAt() {
-        return callLaterMonitoringExpiresAt;
+      async callLaterMonitoringReport({ storeId: scope = storeId, limit = 100, offset = 0 } = {}) {
+        const summary = await database.prepare(`
+          SELECT COUNT(*) AS tickets, COALESCE(SUM(captures), 0) AS captures,
+            COALESCE(SUM(CASE WHEN captures > 1 THEN 1 ELSE 0 END), 0) AS ticketsWithChanges,
+            MIN(first_observed) AS firstObservedAt, MAX(last_observed) AS lastObservedAt
+          FROM (
+            SELECT COUNT(*) AS captures, MIN(observed_at) AS first_observed, MAX(observed_at) AS last_observed
+            FROM call_later_update_observations
+            WHERE (? IS NULL OR store_id = ?)
+            GROUP BY store_id, order_id
+          ) AS histories
+        `).get(scope, scope);
+        const observations = await database.prepare(`
+          SELECT store_id AS storeId, order_id AS orderId, service_order_id AS serviceOrderId,
+            status_time AS statusTime, call_later_at AS callLaterAt,
+            last_interaction_at AS lastInteractionAt, call_due_at AS callDueAt,
+            no_of_calls AS noOfCalls, observed_at AS observedAt
+          FROM call_later_update_observations
+          WHERE (? IS NULL OR store_id = ?)
+          ORDER BY observed_at ASC, id ASC LIMIT ? OFFSET ?
+        `).all(scope, scope, limit, offset);
+        const expiresAt = (await monitoringExpiryStatement.get()).expires_at;
+        return {
+          expiresAt,
+          active: Date.now() <= Date.parse(expiresAt),
+          summary: {
+            ...summary,
+            tickets: Number(summary.tickets),
+            captures: Number(summary.captures),
+            ticketsWithChanges: Number(summary.ticketsWithChanges),
+          },
+          observations,
+          limit,
+          offset,
+          hasMore: offset + observations.length < Number(summary.captures),
+        };
+      },
+      async callLaterMonitoringExpiresAt() {
+        return (await monitoringExpiryStatement.get()).expires_at;
       },
       async close() {
         await database.close();
