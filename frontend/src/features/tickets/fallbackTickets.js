@@ -34,10 +34,6 @@ export const fallbackTickets = [
       hoursRemaining: 4,
       status: 'normal',
     },
-    meta: {
-      isUrgent: false,
-      urgencyScore: 44,
-    },
   },
   {
     id: 'T-2077',
@@ -74,10 +70,6 @@ export const fallbackTickets = [
       hoursRemaining: 0,
       status: 'critical',
     },
-    meta: {
-      isUrgent: true,
-      urgencyScore: 90,
-    },
   },
   {
     id: 'T-3301',
@@ -113,10 +105,6 @@ export const fallbackTickets = [
       overdue: false,
       hoursRemaining: 8,
       status: 'normal',
-    },
-    meta: {
-      isUrgent: false,
-      urgencyScore: 18,
     },
   },
 ];

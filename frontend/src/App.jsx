@@ -5,7 +5,7 @@ import CompleteView from './features/closed-tickets/CompleteView.jsx';
 import TicketCard from './features/tickets/TicketCard.jsx';
 import { formatDataAge } from './features/tickets/ticketFormatters.js';
 import { fallbackTickets } from './features/tickets/fallbackTickets.js';
-import { compareTicketsByUrgency, getTicketUrgency, normalizeTicketForUi } from './features/tickets/ticketModel.js';
+import { compareTickets, normalizeTicketForUi } from './features/tickets/ticketModel.js';
 import { filterLabel } from './features/tickets/statusLabels.js';
 import { changeMarker, readTicketChanges, trackTicketChanges } from './features/tickets/ticketChanges.js';
 import {
@@ -32,6 +32,7 @@ const demoTickets = (storeId) => (import.meta.env.DEV && storeId === 'alexandrou
 const OPEN_FILTERS = FILTERS.filter((filter) => filter !== 'COMPLETE');
 const LAST_OPEN_FILTER_KEY = 'fiona-last-open-filter';
 const formatClock = (value) => new Date(value).toLocaleTimeString('el-GR', { hourCycle: 'h23', hour: '2-digit', minute: '2-digit' });
+const serviceFilterKey = (title) => String(title || 'Εισιτήριο').trim().replace(/\s+/g, ' ').toLowerCase();
 
 const LOAD_ERRORS = {
   offline: 'Δεν υπάρχει σύνδεση στο internet.',
@@ -55,8 +56,8 @@ function App() {
   const [sourceMode, setSourceMode] = useState(() => readCachedTickets(readSelectedStore()) ? 'cached' : demoTickets(readSelectedStore()).length ? 'fallback' : 'empty');
   const [showSearch, setShowSearch] = useState(false);
   const [teamFilter, setTeamFilter] = useState(() => localStorage.getItem('fiona-team-filter') || '');
+  const [serviceFilter, setServiceFilter] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [urgentOnly, setUrgentOnly] = useState(false);
   const [changeItems, setChangeItems] = useState(() => readTicketChanges(readSelectedStore()));
   const [syncTrigger, setSyncTrigger] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -199,30 +200,33 @@ function App() {
 
   const pull = usePullToRefresh(refresh, loading);
 
-  // Urgency only changes at minute granularity for sorting purposes; avoid re-sorting every second.
-  const minuteNow = Math.floor(now / 60000) * 60000;
   const openTickets = useMemo(() => tickets.filter((ticket) => ticket.status !== 'COMPLETED'), [tickets]);
-  const urgency = useMemo(() => openTickets.reduce((counts, ticket) => {
-    const state = getTicketUrgency(ticket, minuteNow);
-    return {
-      slaOverdue: counts.slaOverdue + (state.slaOverdue ? 1 : 0),
-      callOverdue: counts.callOverdue + (state.callOverdue ? 1 : 0),
-      callSoon: counts.callSoon + (state.callSoon ? 1 : 0),
-    };
-  }, { slaOverdue: 0, callOverdue: 0, callSoon: 0 }), [openTickets, minuteNow]);
-  const urgentTotal = openTickets.filter((ticket) => getTicketUrgency(ticket, minuteNow).urgent).length;
+  const serviceTickets = useMemo(() => openTickets.filter((ticket) => {
+    const matchesStatus = activeFilter === 'ALL' || ticket.status === activeFilter;
+    const matchesTeam = activeFilter !== 'APPOINTMENT' || !teamFilter || ticket.teamName === teamFilter;
+    return matchesStatus && matchesTeam;
+  }), [activeFilter, teamFilter, openTickets]);
+  const serviceFilters = useMemo(() => {
+    const options = new Map();
+    serviceTickets.forEach((ticket) => {
+      const label = String(ticket.title || '').trim() || 'Εισιτήριο';
+      const key = serviceFilterKey(label);
+      const option = options.get(key);
+      if (option) option.count += 1;
+      else options.set(key, { key, label, count: 1 });
+    });
+    return [{ key: '', label: 'Όλες', count: serviceTickets.length }, ...options.values()];
+  }, [serviceTickets]);
 
   const filteredTickets = useMemo(() => {
     const query = normalizeSearchText(searchQuery.trim());
-    return openTickets.filter((ticket) => {
-      const matchesStatus = activeFilter === 'ALL' || ticket.status === activeFilter;
+    return serviceTickets.filter((ticket) => {
       const matchesQuery = !query || [ticket.serviceOrderId, ticket.title, ticket.customerName, ticket.address]
         .some((value) => normalizeSearchText(value).includes(query));
-      const matchesTeam = activeFilter !== 'APPOINTMENT' || !teamFilter || ticket.teamName === teamFilter;
-      const matchesUrgency = !urgentOnly || getTicketUrgency(ticket, minuteNow).urgent;
-      return matchesStatus && matchesQuery && matchesTeam && matchesUrgency;
-    }).sort(compareTicketsByUrgency(minuteNow));
-  }, [activeFilter, searchQuery, teamFilter, openTickets, urgentOnly, minuteNow]);
+      const matchesService = !serviceFilter || serviceFilterKey(ticket.title) === serviceFilter;
+      return matchesQuery && matchesService;
+    }).sort(compareTickets);
+  }, [searchQuery, serviceFilter, serviceTickets]);
 
   const searchSuggestions = useMemo(() => [...new Set(tickets.flatMap((ticket) => [
     ticket.serviceOrderId,
@@ -234,6 +238,7 @@ function App() {
   const teamNames = useMemo(() => [...new Set(tickets.filter((ticket) => ticket.status === 'APPOINTMENT' && ticket.teamName).map((ticket) => ticket.teamName))].sort(), [tickets]);
   const changeTeam = (value) => {
     setTeamFilter(value);
+    setServiceFilter('');
     localStorage.setItem('fiona-team-filter', value);
   };
   function changeStore(value) {
@@ -247,7 +252,7 @@ function App() {
     setPossiblyTruncated(false);
     setLoadError(null);
     setSearchQuery('');
-    setUrgentOnly(false);
+    setServiceFilter('');
     setLoading(true);
   }
   const logout = async () => {
@@ -264,7 +269,14 @@ function App() {
       setLoggingOut(false);
     }
   };
-  const showOpen = () => setActiveFilter(window.sessionStorage.getItem(LAST_OPEN_FILTER_KEY) || 'ALL');
+  const showOpen = () => {
+    setServiceFilter('');
+    setActiveFilter(window.sessionStorage.getItem(LAST_OPEN_FILTER_KEY) || 'ALL');
+  };
+  const changeStatusFilter = (value) => {
+    setServiceFilter('');
+    setActiveFilter(value);
+  };
 
   const statusCounts = useMemo(() => Object.fromEntries(
     OPEN_FILTERS.map((status) => [status, status === 'ALL' ? openTickets.length : openTickets.filter((ticket) => ticket.status === status).length])
@@ -274,12 +286,6 @@ function App() {
   const configuredStores = stores.filter((store) => store.configured);
   const statusText = loading ? 'Συγχρονισμός…' : sourceMode === 'live' ? 'Ενημερωμένο' : sourceMode === 'stale' || sourceMode === 'cached' ? 'Παλιά δεδομένα' : 'Χωρίς δεδομένα';
   const dataAge = lastUpdated ? formatDataAge(lastUpdated, now) : null;
-  const urgentParts = [
-    urgency.slaOverdue && `${urgency.slaOverdue} εκτός ορίου ολοκλήρωσης`,
-    urgency.callOverdue && `${urgency.callOverdue} με ληγμένη προθεσμία κλήσης`,
-    urgency.callSoon && `${urgency.callSoon} ${urgency.callSoon === 1 ? 'κλήση λήγει' : 'κλήσεις λήγουν'} σε λιγότερο από 1 ώρα`,
-  ].filter(Boolean);
-
   return (
     <div className="app-shell">
       <UpdateBanner />
@@ -335,22 +341,24 @@ function App() {
           )}
         </div>
         {!isComplete && <div className="filter-row" role="tablist" aria-label="Φίλτρο κατάστασης">
-          {visibleFilters.map((filter) => <button key={filter} type="button" role="tab" aria-selected={activeFilter === filter} className={`filter-chip ${activeFilter === filter ? 'active' : ''}`} onClick={() => setActiveFilter(filter)}>{filterLabel(filter)}<span>{statusCounts[filter]}</span></button>)}
+          {visibleFilters.map((filter) => <button key={filter} type="button" role="tab" aria-selected={activeFilter === filter} className={`filter-chip ${activeFilter === filter ? 'active' : ''}`} onClick={() => changeStatusFilter(filter)}>{filterLabel(filter)}<span>{statusCounts[filter]}</span></button>)}
         </div>}
       </header>
 
       {isComplete ? <CompleteView storeId={storeId} stores={stores} searchQuery={searchQuery} onSearchChange={setSearchQuery} /> : <main className="queue-main">
-        {urgentTotal > 0 && (
-          <button type="button" className={`urgent-bar${urgentOnly ? ' active' : ''}`} aria-pressed={urgentOnly} onClick={() => setUrgentOnly((value) => !value)}>
-            <Icon name="alert" size={18} />
-            <span><strong>Χρειάζονται άμεση ενέργεια: {urgentTotal}</strong><small>{urgentParts.join(' · ')}</small></span>
-            <em>{urgentOnly ? 'Εμφάνιση όλων' : 'Μόνο αυτά'}</em>
-          </button>
-        )}
-        <div className="queue-heading"><div><h2>{urgentOnly ? 'Επείγοντα' : activeFilter === 'ALL' ? 'Εργασίες πεδίου' : filterLabel(activeFilter)}</h2></div><span>{filteredTickets.length} εισιτήρια</span></div>
+        <div className="service-filter-row" role="group" aria-label="Φίλτρο είδους εργασίας">
+          {serviceFilters.map((filter) => <button
+            key={filter.key || 'all'}
+            type="button"
+            className={`service-filter-chip${serviceFilter === filter.key ? ' active' : ''}`}
+            aria-pressed={serviceFilter === filter.key}
+            onClick={() => setServiceFilter(filter.key)}
+          >{filter.label} ({filter.count})</button>)}
+        </div>
+        <div className="queue-heading"><div><h2>{activeFilter === 'ALL' ? 'Εργασίες πεδίου' : filterLabel(activeFilter)}</h2></div><span>{filteredTickets.length} εισιτήρια</span></div>
         <div className="ticket-list">
           {filteredTickets.length === 0 && <p className="empty-state">{
-            sourceMode === 'live' ? (searchQuery || urgentOnly ? 'Κανένα εισιτήριο δεν ταιριάζει με την αναζήτηση ή τα φίλτρα.' : 'Δεν υπάρχουν εισιτήρια για αυτό το φίλτρο.')
+            sourceMode === 'live' ? (searchQuery ? 'Κανένα εισιτήριο δεν ταιριάζει με την αναζήτηση ή τα φίλτρα.' : 'Δεν υπάρχουν εισιτήρια για αυτό το φίλτρο.')
               : loading ? 'Φόρτωση εισιτηρίων…' : 'Δεν υπάρχουν διαθέσιμα δεδομένα. Δοκίμασε ξανά όταν υπάρξει σύνδεση.'
           }</p>}
           {filteredTickets.map((ticket) => <TicketCard key={`${ticket.storeId}:${ticket.id}`} ticket={ticket} now={now} showStore={storeId === 'all'} marker={changeMarker(changeItems, ticket, now)} />)}
@@ -359,7 +367,7 @@ function App() {
 
       <nav className="bottom-nav" aria-label="Κύρια πλοήγηση">
         <button type="button" className={!isComplete ? 'active' : ''} aria-current={!isComplete ? 'page' : undefined} onClick={showOpen}><Icon name="ticket" size={20} /><span>Ανοιχτά</span>{openTickets.length > 0 && <b>{openTickets.length}</b>}</button>
-        <button type="button" className={isComplete ? 'active' : ''} aria-current={isComplete ? 'page' : undefined} onClick={() => setActiveFilter('COMPLETE')}><Icon name="done" size={20} /><span>Ολοκληρωμένα</span></button>
+        <button type="button" className={isComplete ? 'active' : ''} aria-current={isComplete ? 'page' : undefined} onClick={() => changeStatusFilter('COMPLETE')}><Icon name="done" size={20} /><span>Ολοκληρωμένα</span></button>
         <a href="/tracker/"><Icon name="trophy" size={20} /><span>Πόντοι</span></a>
       </nav>
     </div>

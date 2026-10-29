@@ -244,22 +244,6 @@ function isCompletedStatus(statusValue) {
   return ['COMPLETED', 'DONE', 'CLOSED', 'FINISHED'].includes(value);
 }
 
-function getUrgencyScore(order, priority, sla) {
-  let score = 0;
-  const status = String(order?.orderStatus || '').trim().toUpperCase();
-  const callAttempts = Number(order?.noOfCalls || 0);
-
-  if (status === 'CALL LATER') score += 20;
-  if (status === 'APPOINTMENT') score += 10;
-  if (sla?.overdue) score += 35;
-  if (priority.level === 1) score += 25;
-  if (priority.level === 2) score += 15;
-  if (callAttempts >= 3) score += 15;
-  if (sla?.hoursRemaining !== null && sla.hoursRemaining <= 2) score += 20;
-
-  return score;
-}
-
 function normalizeTicket(order) {
   const priority = normalizePriority(order?.priority);
   const dueDate = getSlaDueDate(order);
@@ -369,14 +353,6 @@ function normalizeTicket(order) {
       source: 'Fiona',
       isCompleted: isCompletedStatus(status),
       isOpen: !isCompletedStatus(status),
-      isUrgent: overdue || getUrgencyScore(order, priority, {
-        overdue,
-        hoursRemaining: hoursRemaining !== null ? Number(hoursRemaining.toFixed(2)) : null,
-      }) >= 50,
-      urgencyScore: getUrgencyScore(order, priority, {
-        overdue,
-        hoursRemaining: hoursRemaining !== null ? Number(hoursRemaining.toFixed(2)) : null,
-      }),
     },
     raw: order,
   };
@@ -405,10 +381,6 @@ export function normalizeOrders(payload) {
     .map(normalizeTicket)
     .filter((ticket) => !ticket.meta.isCompleted)
     .sort((a, b) => {
-      if (a.meta.isUrgent !== b.meta.isUrgent) {
-        return a.meta.isUrgent ? -1 : 1;
-      }
-
       const aLevel = a.priority.level ?? 4;
       const bLevel = b.priority.level ?? 4;
       if (aLevel !== bLevel) {

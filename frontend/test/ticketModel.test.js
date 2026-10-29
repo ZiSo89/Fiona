@@ -70,17 +70,8 @@ test('labels the age of data only once it is at least two minutes old', () => {
   assert.equal(formatDataAge(new Date(now - 3 * 60 * 60 * 1000).toISOString(), now), 'πριν 3 ώρ.');
 });
 
-test('urgent tickets are listed before appointments and the countdown drops seconds above one hour', async () => {
-  const { compareTicketsByUrgency, getTicketUrgency } = await import('../src/features/tickets/ticketModel.js');
+test('formats countdowns with seconds in the last hour', async () => {
   const { formatTimer } = await import('../src/features/tickets/ticketFormatters.js');
-  const overdue = { id: 'overdue', status: 'OPEN', slaDeadline: hours(-1) };
-  const callSoon = { id: 'call-soon', status: 'OPEN', showCallDeadline: true, activityDueDate: hours(0.5), slaDeadline: hours(30) };
-  const appointment = { id: 'appointment', status: 'APPOINTMENT', scheduledFrom: hours(1), slaDeadline: hours(30) };
-  const calm = { id: 'calm', status: 'OPEN', slaDeadline: hours(30) };
-
-  assert.deepEqual(getTicketUrgency(callSoon, now), { slaOverdue: false, callOverdue: false, callSoon: true, urgent: true });
-  assert.deepEqual([calm, appointment, callSoon, overdue].sort(compareTicketsByUrgency(now)).map((ticket) => ticket.id),
-    ['overdue', 'call-soon', 'appointment', 'calm']);
 
   assert.equal(formatTimer(59 * 60 * 1000 + 5000), '59:05');
   assert.equal(formatTimer(2 * 60 * 60 * 1000 + 5 * 60 * 1000), '2 ώρ. 5 λεπ.');

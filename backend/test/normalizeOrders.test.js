@@ -156,6 +156,19 @@ test('shows Same Day and Standard priority as sent and hides a missing one', () 
   assert.deepEqual(result.tickets.map((ticket) => ticket.serviceOrderId), ['A', 'B', 'C']);
 });
 
+test('orders by priority and SLA without promoting overdue tickets', () => {
+  const result = normalizeOrders({
+    FilteredOrders: [
+      { id: 'overdue-low', orderStatus: 'CALL LATER', noOfCalls: '3', priority: '3', workOrderSlaDate: '2020-01-01' },
+      { id: 'high-priority', orderStatus: 'OPEN', priority: '1', workOrderSlaDate: '2030-01-01' },
+    ],
+  });
+
+  assert.deepEqual(result.tickets.map((ticket) => ticket.id), ['high-priority', 'overdue-low']);
+  assert.equal('isUrgent' in result.tickets[1].meta, false);
+  assert.equal('urgencyScore' in result.tickets[1].meta, false);
+});
+
 test('reads coordinates in any order and builds a map link', () => {
   const tickets = normalizeOrders({
     FilteredOrders: [
