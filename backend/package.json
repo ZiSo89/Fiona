@@ -1,0 +1,32 @@
+{
+  "name": "fiona-pwa-backend",
+  "version": "1.0.0",
+  "description": "Polling backend for Fiona service tickets",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node --test",
+    "sync:closed": "node src/cli/syncClosedTickets.js",
+    "db:export": "node src/cli/migrateDatabase.js export",
+    "db:import": "node src/cli/migrateDatabase.js import",
+    "test:mysql": "node --test test/mysql.integration.test.js",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "dotenv": "^16.4.1",
+    "express": "^4.19.2",
+    "helmet": "^8.3.0",
+    "mysql2": "^3.15.3"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.7.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0"
+  }
+}

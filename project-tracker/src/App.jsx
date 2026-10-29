@@ -1,0 +1,939 @@
+import { useEffect, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CalendarDays,
+  Check,
+  ArrowDownUp,
+  CircleAlert,
+  Cloud,
+  Copy,
+  LoaderCircle,
+  LockKeyhole,
+  LogOut,
+  MapPin,
+  MessageSquareText,
+  Moon,
+  Pencil,
+  RefreshCw,
+  Save,
+  Search,
+  ShieldCheck,
+  Sun,
+  Ticket,
+  Trophy,
+  X,
+} from 'lucide-react';
+import AdminOverview from './components/AdminOverview.jsx';
+import CategoryPicker from './components/CategoryPicker.jsx';
+import ConfirmDialog from './components/ConfirmDialog.jsx';
+import Modal from './components/Modal.jsx';
+import PointsGuide from './components/PointsGuide.jsx';
+import UpdateBanner from './components/UpdateBanner.jsx';
+import { categories, categoryLabel, pointsNote } from './categories.js';
+import {
+  profileKey,
+  jobKey,
+  applyJobDraft,
+  updateMonthJob,
+  scrollToJob,
+  readTrackerView,
+  currentAthensDate,
+  currentAthensMonth,
+  getMonthTitle,
+  shiftMonth,
+  calendarCells,
+  formatDate,
+  formatTime,
+  jobLabel,
+  formatDateTime,
+  trackerRequest,
+  jobGreekLabel,
+  copyText,
+  WEEKDAY_LABELS,
+} from './trackerModel.js';
+
+const pointsLabel = (points) => `${points} ${points === 1 ? 'πόντος' : 'πόντοι'}`;
+
+function App() {
+  const today = currentAthensDate();
+  const [savedView] = useState(readTrackerView);
+  const [profiles, setProfiles] = useState([]);
+  const [lastSyncAt, setLastSyncAt] = useState(null);
+  const [selectedProfileKey, setSelectedProfileKey] = useState(savedView.profileKey);
+  const [month, setMonth] = useState(savedView.month || currentAthensMonth());
+  const [selectedDate, setSelectedDate] = useState(savedView.date || today);
+  const [monthData, setMonthData] = useState(null);
+  const [dayJobs, setDayJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
+  const lastMonthViewRef = useRef('');
+  const autoPickDayRef = useRef(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [editor, setEditor] = useState(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [loginRole, setLoginRole] = useState('editor');
+  const [loginBusy, setLoginBusy] = useState(false);
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [confirmLockOpen, setConfirmLockOpen] = useState(false);
+  const [overview, setOverview] = useState({ month: '', teams: [], loading: false });
+  const [drafts, setDrafts] = useState({});
+  const [savingJobId, setSavingJobId] = useState('');
+  const [savingMonthLock, setSavingMonthLock] = useState(false);
+  const [jobDetails, setJobDetails] = useState({});
+  const [loadingJobDetails, setLoadingJobDetails] = useState({});
+  const [dayFilter, setDayFilter] = useState('all');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [newestFirst, setNewestFirst] = useState(false);
+  const [editingJobId, setEditingJobId] = useState('');
+  const [pickerJobId, setPickerJobId] = useState('');
+  const [copiedJobId, setCopiedJobId] = useState('');
+  const [darkMode, setDarkMode] = useState(() => {
+    try {
+      return localStorage.getItem('project-tracker-theme') === 'dark';
+    } catch {
+      return false;
+    }
+  });
+
+  const selectedProfile = profiles.find((profile) => profileKey(profile) === selectedProfileKey)
+    || profiles[0]
+    || null;
+  const selectedKey = selectedProfile ? profileKey(selectedProfile) : '';
+  const editorIsAdmin = editor?.role === 'admin';
+  const editorMatchesProfile = Boolean(editorIsAdmin || (editor && selectedProfile
+    && editor.storeId === selectedProfile.storeId && editor.teamName === selectedProfile.teamName));
+  const monthLockMatchesView = monthData?.profileKey === selectedKey && monthData?.month === month;
+  const monthLocked = Boolean(monthLockMatchesView && monthData?.paymentLock?.locked);
+  const canEditCorrections = editorMatchesProfile && (editorIsAdmin || !monthLocked);
+
+  useEffect(() => {
+    let active = true;
+    const loadProfiles = async () => {
+      try {
+        const data = await trackerRequest('/profiles');
+        if (active) {
+          setProfiles(data.profiles || []);
+          setLastSyncAt(data.lastSyncAt || null);
+          setError('');
+        }
+      } catch (requestError) {
+        if (active) setError(requestError.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+    void loadProfiles();
+    const timer = window.setInterval(() => {
+      void loadProfiles();
+      setRefreshTick((tick) => tick + 1);
+    }, 60000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!profiles.length) return;
+    if (!profiles.some((profile) => profileKey(profile) === selectedProfileKey)) {
+      setSelectedProfileKey(profileKey(profiles[0]));
+    }
+  }, [profiles, selectedProfileKey]);
+
+  useEffect(() => {
+    if (!selectedProfile) return;
+    try {
+      localStorage.setItem('project-tracker-view', JSON.stringify({
+        profileKey: selectedKey,
+        month,
+        date: selectedDate,
+      }));
+    } catch {
+      // Local storage may be disabled; the current view still works.
+    }
+  }, [selectedKey, month, selectedDate]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = darkMode ? 'dark' : 'light';
+    try {
+      localStorage.setItem('project-tracker-theme', darkMode ? 'dark' : 'light');
+    } catch {
+      // Local storage may be disabled; the current page theme still works.
+    }
+  }, [darkMode]);
+
+  useEffect(() => {
+    if (!selectedProfile) {
+      setMonthData(null);
+      setDayJobs([]);
+      setEditor(null);
+      return undefined;
+    }
+    let active = true;
+    setRefreshing(true);
+    // Keep the current list during the periodic refresh so the page height and scroll position stay stable.
+    const viewKey = `${selectedKey}|${month}`;
+    if (lastMonthViewRef.current !== viewKey) {
+      lastMonthViewRef.current = viewKey;
+      setDayJobs([]);
+    }
+    const query = new URLSearchParams({
+      month,
+      storeId: selectedProfile.storeId,
+      teamName: selectedProfile.teamName,
+    });
+    trackerRequest(`/month?${query}`)
+      .then((data) => { if (active) { setMonthData({ ...data, profileKey: selectedKey }); setError(''); } })
+      .catch((requestError) => { if (active) setError(requestError.message); })
+      .finally(() => { if (active) setRefreshing(false); });
+    return () => { active = false; };
+  }, [selectedKey, month, refreshTick]);
+
+  // After moving to another month, open the first day with work instead of an empty day.
+  useEffect(() => {
+    if (!autoPickDayRef.current || monthData?.profileKey !== selectedKey || monthData?.month !== month) return;
+    autoPickDayRef.current = false;
+    const days = monthData.days || [];
+    if (days.some((day) => day.date === selectedDate && day.jobCount)) return;
+    const firstWorkDay = days.find((day) => day.jobCount);
+    if (firstWorkDay) setSelectedDate(firstWorkDay.date);
+  }, [monthData, selectedKey, month, selectedDate]);
+
+  useEffect(() => {
+    if (editor?.role !== 'admin') {
+      setOverview({ month: '', teams: [], loading: false });
+      return undefined;
+    }
+    let active = true;
+    setOverview((current) => ({ ...current, loading: true }));
+    trackerRequest(`/admin/overview?${new URLSearchParams({ month })}`)
+      .then((data) => { if (active) setOverview({ month: data.month, teams: data.teams || [], loading: false }); })
+      .catch((requestError) => {
+        if (!active) return;
+        setOverview((current) => ({ ...current, loading: false }));
+        setError(requestError.message);
+      });
+    return () => { active = false; };
+  }, [editor, month, refreshTick]);
+
+  useEffect(() => {
+    if (!notice) return undefined;
+    const timer = window.setTimeout(() => setNotice(''), 3000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  const hasUnsavedDrafts = Object.values(drafts).some((draft) => draft.categorySelected);
+  useEffect(() => {
+    if (!hasUnsavedDrafts) return undefined;
+    const warn = (event) => {
+      event.preventDefault();
+      event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [hasUnsavedDrafts]);
+
+  useEffect(() => {
+    if (!selectedProfile || !selectedDate.startsWith(month)) {
+      setSelectedDate(month === currentAthensMonth() ? today : `${month}-01`);
+      return undefined;
+    }
+    let active = true;
+    const query = new URLSearchParams({
+      date: selectedDate,
+      storeId: selectedProfile.storeId,
+      teamName: selectedProfile.teamName,
+    });
+    trackerRequest(`/day?${query}`)
+      .then((data) => { if (active) setDayJobs(data.jobs || []); })
+      .catch((requestError) => { if (active) setError(requestError.message); });
+    return () => { active = false; };
+  }, [selectedKey, selectedDate, month, refreshTick]);
+
+  useEffect(() => {
+    if (!selectedProfile) return undefined;
+    let active = true;
+    trackerRequest('/session')
+      .then((data) => {
+        if (active && (data.editor?.role === 'admin'
+          || (data.editor?.storeId === selectedProfile.storeId
+            && data.editor?.teamName === selectedProfile.teamName))) setEditor(data.editor);
+        else if (active) setEditor(null);
+      })
+      .catch(() => { if (active) setEditor(null); });
+    return () => { active = false; };
+  }, [selectedKey]);
+
+  useEffect(() => {
+    setJobDetails({});
+    setLoadingJobDetails({});
+  }, [selectedKey]);
+
+  useEffect(() => {
+    setDayFilter('all');
+    setSearchTerm('');
+    setSearchOpen(false);
+    setEditingJobId('');
+  }, [selectedKey, selectedDate]);
+
+  useEffect(() => {
+    if (!editorMatchesProfile || !selectedProfile || !dayJobs.length) return undefined;
+    let active = true;
+    const pendingJobs = dayJobs.filter((job) => {
+      const jobKey = `${job.storeId}::${job.orderId}`;
+      return !jobDetails[jobKey] && !loadingJobDetails[jobKey];
+    });
+    if (!pendingJobs.length) return undefined;
+
+    setLoadingJobDetails((current) => ({
+      ...current,
+      ...Object.fromEntries(pendingJobs.map((job) => [`${job.storeId}::${job.orderId}`, true])),
+    }));
+    pendingJobs.forEach((job) => {
+      const jobKey = `${job.storeId}::${job.orderId}`;
+      const query = new URLSearchParams({ storeId: job.storeId, teamName: job.teamName });
+      trackerRequest(`/jobs/${encodeURIComponent(job.orderId)}/details?${query}`)
+        .then((response) => {
+          if (active) setJobDetails((current) => ({ ...current, [jobKey]: response.details }));
+        })
+        .catch((requestError) => { if (active) setError(requestError.message); })
+        .finally(() => {
+          if (active) setLoadingJobDetails((current) => ({ ...current, [jobKey]: false }));
+        });
+    });
+    return () => { active = false; };
+  }, [editorMatchesProfile, selectedKey, dayJobs]);
+
+  const openLogin = (role) => {
+    setLoginError('');
+    setPassword('');
+    setLoginRole(role);
+    setLoginOpen(true);
+  };
+
+  const handleLogin = async (event) => {
+    event.preventDefault();
+    if (!selectedProfile || loginBusy) return;
+    setLoginError('');
+    setLoginBusy(true);
+    try {
+      const data = await trackerRequest('/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          storeId: selectedProfile.storeId,
+          teamName: selectedProfile.teamName,
+          role: loginRole,
+          password,
+        }),
+      });
+      setEditor(data.editor);
+      setLoginOpen(false);
+      setPassword('');
+      setNotice(data.editor?.role === 'admin' ? 'Συνδέθηκες ως διαχειριστής.' : `Συνδέθηκες ως ${selectedProfile.teamName}.`);
+    } catch (requestError) {
+      setLoginError(requestError.message);
+    } finally {
+      setLoginBusy(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    if (hasUnsavedDrafts && !window.confirm('Υπάρχουν διορθώσεις που δεν αποθηκεύτηκαν. Αποσύνδεση;')) return;
+    await trackerRequest('/logout', { method: 'POST' }).catch(() => {});
+    setEditor(null);
+    setDrafts({});
+    setJobDetails({});
+    setLoadingJobDetails({});
+  };
+
+  const updateMonthLock = async () => {
+    if (!editorIsAdmin || !selectedProfile) return;
+    setSavingMonthLock(true);
+    try {
+      const data = await trackerRequest('/month-lock', {
+        method: 'PUT',
+        body: JSON.stringify({
+          storeId: selectedProfile.storeId,
+          teamName: selectedProfile.teamName,
+          month,
+          locked: !monthLocked,
+        }),
+      });
+      setMonthData((current) => current && current.profileKey === selectedKey && current.month === month
+        ? { ...current, paymentLock: data.paymentLock }
+        : current);
+      setConfirmLockOpen(false);
+      setNotice(data.paymentLock?.locked ? 'Ο μήνας εγκρίθηκε για πληρωμή.' : 'Ο μήνας ξεκλειδώθηκε.');
+      setRefreshTick((tick) => tick + 1);
+      setError('');
+    } catch (requestError) {
+      setConfirmLockOpen(false);
+      setError(requestError.message);
+    } finally {
+      setSavingMonthLock(false);
+    }
+  };
+
+  const saveCorrection = async (job) => {
+    const key = jobKey(job);
+    const draft = drafts[key] || { categoryId: job.categoryId || '' };
+    const previousJob = dayJobs.find((entry) => jobKey(entry) === key) || job;
+    setSavingJobId(key);
+    try {
+      const data = await trackerRequest(`/jobs/${encodeURIComponent(job.orderId)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          storeId: selectedProfile.storeId,
+          teamName: selectedProfile.teamName,
+          categoryId: draft.categoryId || null,
+          ...(draft.pointsOverride !== undefined ? { pointsOverride: draft.pointsOverride } : {}),
+        }),
+      });
+      setDayJobs((current) => current.map((entry) => (jobKey(entry) === key ? data.job : entry)));
+      setMonthData((current) => current?.profileKey === selectedKey && current.month === month
+        ? updateMonthJob(current, previousJob, data.job)
+        : current);
+      setDrafts((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+      setPickerJobId('');
+      scrollToJob(key);
+      setNotice(`Αποθηκεύτηκε: ${categoryLabel(data.job.categoryId, data.job.categoryName)} · ${pointsLabel(data.job.points)}`);
+      setRefreshTick((tick) => tick + 1);
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSavingJobId('');
+    }
+  };
+
+  const cancelCorrection = (key) => {
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+    setPickerJobId('');
+    scrollToJob(key);
+  };
+
+  const changeMonth = (offset) => {
+    const next = shiftMonth(month, offset);
+    autoPickDayRef.current = true;
+    setMonth(next);
+    setSelectedDate(next === currentAthensMonth() ? today : `${next}-01`);
+  };
+
+  const selectTeam = (team) => {
+    setSelectedProfileKey(profileKey(team));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const goToFirstPendingDay = () => {
+    const pendingDay = (liveMonthData?.days || []).find((day) => day.pendingCount);
+    if (pendingDay) {
+      setSelectedDate(pendingDay.date);
+      setDayFilter('all');
+    }
+  };
+
+  const copyOrderCode = async (jobId, code) => {
+    try {
+      await copyText(code);
+      setCopiedJobId(jobId);
+      setTimeout(() => setCopiedJobId((current) => (current === jobId ? '' : current)), 1500);
+    } catch {
+      setError('Η αντιγραφή απέτυχε. Κράτησε τον κωδικό χειροκίνητα.');
+    }
+  };
+
+  const dayJobsWithDrafts = dayJobs.map((job) => applyJobDraft(job, drafts[jobKey(job)]));
+  const liveMonthData = dayJobsWithDrafts.reduce(
+    (current, job, index) => updateMonthJob(current, dayJobs[index], job),
+    monthData,
+  );
+  const liveMonthTotal = liveMonthData?.totalPoints ?? 0;
+  const filterOptions = [...dayJobsWithDrafts.reduce((map, job) => map.set(jobLabel(job), (map.get(jobLabel(job)) || 0) + 1), new Map())];
+  const needle = searchTerm.trim().toLocaleLowerCase('el-GR');
+  const visibleJobs = dayJobsWithDrafts
+    .filter((job) => dayFilter === 'all' || jobLabel(job) === dayFilter)
+    .filter((job) => {
+      if (!needle) return true;
+      const details = jobDetails[`${job.storeId}::${job.orderId}`] || {};
+      return [jobLabel(job), jobGreekLabel(job), details.serviceOrderId, details.customerName, details.address, details.latestComment?.text]
+        .filter(Boolean).join(' ').toLocaleLowerCase('el-GR').includes(needle);
+    })
+    .sort((a, b) => (newestFirst ? 1 : -1) * (new Date(b.closedAt) - new Date(a.closedAt)));
+  const activeJobId = visibleJobs.some((job) => jobKey(job) === editingJobId)
+    ? editingJobId
+    : visibleJobs[0] ? jobKey(visibleJobs[0]) : '';
+
+  const dayMap = new Map((liveMonthData?.days || []).map((day) => [day.date, day]));
+  const cells = calendarCells(month);
+  const weekRows = Array.from({ length: cells.length / 7 }, (_, index) => cells.slice(index * 7, index * 7 + 7));
+  const selectedDay = dayMap.get(selectedDate) || { jobCount: dayJobsWithDrafts.length, points: dayJobsWithDrafts.reduce((sum, job) => sum + job.points, 0) };
+
+  return (
+    <main className="app-shell">
+      <UpdateBanner />
+      <header className="topbar">
+        <a className="brand" href="/tracker/" aria-label="Πόντοι συνεργείων Fiona, αρχική">
+          <span className="brand-mark"><CalendarDays size={17} strokeWidth={2.2} /></span>
+          <span className="brand-copy">
+            <span className="brand-kicker">FIONA · ΠΕΔΙΟ</span>
+            <span className="brand-title">Πόντοι συνεργείων</span>
+          </span>
+        </a>
+        <div className="topbar-controls">
+          <a className="toolbar-button app-switch" href="/app/" title="Εισιτήρια Fiona">
+            <Ticket size={16} />
+            <span>Εισιτήρια</span>
+          </a>
+          {selectedProfile && (
+            <label className="profile-select-wrap">
+              <span>ΣΥΝΕΡΓΕΙΟ</span>
+              <select
+                aria-label="Επιλογή συνεργείου"
+                value={selectedKey}
+                onChange={(event) => setSelectedProfileKey(event.target.value)}
+              >
+                {[...new Set(profiles.map((profile) => profile.storeName))].map((storeName) => (
+                  <optgroup key={storeName} label={storeName}>
+                    {profiles.filter((profile) => profile.storeName === storeName).map((profile) => (
+                      <option key={profileKey(profile)} value={profileKey(profile)}>
+                        {profile.teamName}{profile.unmappedCount ? ` · ${profile.unmappedCount} ${profile.unmappedCount === 1 ? 'εκκρεμεί' : 'εκκρεμούν'}` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+          )}
+          {editor ? (
+            <button className="toolbar-button editor-on" type="button" onClick={handleLogout} title="Αποσύνδεση">
+              <LogOut size={16} />
+              <span>Αποσύνδεση</span>
+            </button>
+          ) : (
+            <>
+              <button className="toolbar-button" type="button" onClick={() => openLogin('editor')} disabled={!selectedProfile}>
+                <LockKeyhole size={16} />
+                <span>Σύνδεση</span>
+              </button>
+              <button className="toolbar-button admin-login" type="button" onClick={() => openLogin('admin')} disabled={!selectedProfile}>
+                <ShieldCheck size={16} />
+                <span>Διαχειριστής</span>
+              </button>
+            </>
+          )}
+          <button className="icon-button theme-toggle" type="button" onClick={() => setDarkMode((value) => !value)} aria-label={darkMode ? 'Ενεργοποίηση φωτεινού θέματος' : 'Ενεργοποίηση σκοτεινού θέματος'} title="Αλλαγή θέματος">
+            {darkMode ? <Sun size={17} /> : <Moon size={17} />}
+          </button>
+        </div>
+      </header>
+
+      <div className="page-heading">
+        <div>
+          <p className="eyebrow">ΗΜΕΡΟΛΟΓΙΟ ΑΠΟΔΟΣΗΣ</p>
+          <h1>{selectedProfile?.teamName || 'Συνεργεία Fiona'}</h1>
+          <p className="heading-subtitle">
+            {selectedProfile?.storeName || 'Fiona'}{selectedProfile ? ` · ${selectedProfile.jobCount} εργασίες` : ''}
+          </p>
+        </div>
+        <button className="icon-button refresh-button" type="button" onClick={() => setRefreshTick((tick) => tick + 1)} aria-label="Ανανέωση δεδομένων" title="Ανανέωση">
+          <RefreshCw size={17} className={refreshing ? 'spin' : ''} />
+        </button>
+      </div>
+
+      {error && (
+        <div className="notice notice-error" role="alert">
+          <CircleAlert size={17} />
+          <span>{error}</span>
+          <button className="notice-dismiss" type="button" onClick={() => setError('')} aria-label="Κλείσιμο"><X size={15} /></button>
+        </div>
+      )}
+      {notice && (
+        <div className="notice notice-success" role="status">
+          <Check size={17} />
+          <span>{notice}</span>
+        </div>
+      )}
+      {selectedProfile?.unmappedCount > 0 && editorMatchesProfile && (
+        <div className="notice notice-pending">
+          <CircleAlert size={17} />
+          <span>{selectedProfile.unmappedCount} {selectedProfile.unmappedCount === 1 ? 'εργασία περιμένει' : 'εργασίες περιμένουν'} κατηγορία. Οι ημέρες με εκκρεμότητα έχουν πορτοκαλί σήμανση στο ημερολόγιο.</span>
+        </div>
+      )}
+
+      {editorIsAdmin && (
+        <AdminOverview
+          month={month}
+          monthTitle={getMonthTitle(month)}
+          teams={overview.month === month ? overview.teams : []}
+          loading={overview.loading}
+          onSelectTeam={selectTeam}
+        />
+      )}
+
+      {loading ? (
+        <div className="loading-state"><RefreshCw size={18} className="spin" /> Φόρτωση…</div>
+      ) : !profiles.length ? (
+        <section className="empty-state" aria-live="polite">
+          <span className="empty-icon"><Cloud size={24} /></span>
+          <h2>Δεν υπάρχουν ολοκληρωμένες εργασίες</h2>
+          <p>Τα προφίλ θα εμφανιστούν όταν εισαχθούν οι πρώτες ολοκληρώσεις από τη Fiona.</p>
+        </section>
+      ) : (
+        <>
+          <section className="tracker-workspace" aria-label="Ημερολόγιο εργασιών">
+            <div className="calendar-panel">
+              <div className="month-toolbar">
+                <div className="month-navigation">
+                  <button className="icon-button month-arrow" type="button" onClick={() => changeMonth(-1)} aria-label="Προηγούμενος μήνας"><ArrowLeft size={17} /></button>
+                  <h2>{getMonthTitle(month)}</h2>
+                  <button className="icon-button month-arrow" type="button" onClick={() => changeMonth(1)} aria-label="Επόμενος μήνας"><ArrowRight size={17} /></button>
+                </div>
+                <div className="month-summary-actions">
+                  {monthLocked && (
+                    <span className="month-lock-status"><LockKeyhole size={14} /> Κλειδωμένο για πληρωμή</span>
+                  )}
+                  {editorIsAdmin && (
+                    <button
+                      className={`month-lock-button${monthLocked ? ' is-locked' : ''}`}
+                      type="button"
+                      disabled={savingMonthLock || !monthLockMatchesView}
+                      onClick={() => setConfirmLockOpen(true)}
+                    >
+                      {savingMonthLock ? <RefreshCw size={14} className="spin" /> : <LockKeyhole size={14} />}
+                      {monthLocked ? 'Ξεκλείδωμα' : 'Έγκριση πληρωμής'}
+                    </button>
+                  )}
+                  <div className="month-points" aria-label={`${liveMonthTotal} συνολικοί πόντοι`}>
+                    <strong>{liveMonthTotal}</strong><span>πόντοι</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="calendar-grid" role="grid" aria-label={getMonthTitle(month)}>
+                <div className="weekday-row" role="row">
+                  {WEEKDAY_LABELS.map((weekday) => <span role="columnheader" key={weekday}>{weekday}</span>)}
+                </div>
+                <div className="calendar-weeks">
+                  {weekRows.map((week, weekIndex) => (
+                    <div className="calendar-week" role="row" key={`${month}-week-${weekIndex}`}>
+                      {week.map((date, dayIndex) => {
+                        if (!date) return <span className="calendar-empty" role="gridcell" key={`${weekIndex}-${dayIndex}`} />;
+                        const day = dayMap.get(date);
+                        const selected = selectedDate === date;
+                        return (
+                          <button
+                            className={`calendar-day${selected ? ' selected' : ''}${date === today ? ' today' : ''}${day?.jobCount ? ' has-work' : ''}${day?.pendingCount ? ' has-pending' : ''}`}
+                            type="button"
+                            role="gridcell"
+                            aria-selected={selected}
+                            aria-label={`${formatDate(date)}${day?.jobCount ? `, ${day.jobCount} εργασίες, ${day.points} πόντοι` : ''}${day?.pendingCount ? `, ${day.pendingCount} ${day.pendingCount === 1 ? 'εκκρεμεί' : 'εκκρεμούν'}` : ''}`}
+                            key={date}
+                            onClick={() => setSelectedDate(date)}
+                          >
+                            <span className="day-number">{Number(date.slice(-2))}</span>
+                            {day?.jobCount ? <span className="day-points">{day.points} π.</span> : <span className="day-empty-mark" />}
+                            {day?.pendingCount ? <span className="day-pending-mark" aria-hidden="true" /> : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="calendar-footer">
+                <span><i className="legend-dot" /> Ημέρα με εργασίες</span>
+                <span><i className="legend-dot legend-pending" /> Εκκρεμεί κατηγορία</span>
+                <span className="live-state"><span className="live-dot" /> {lastSyncAt ? `Τελευταίος συγχρονισμός Fiona: ${formatTime(lastSyncAt)}` : 'Αναμονή πρώτου συγχρονισμού Fiona'}</span>
+              </div>
+            </div>
+
+            <section className="day-panel" aria-label="Εργασίες επιλεγμένης ημέρας">
+              <div className="day-panel-heading">
+                <div>
+                  <p className="eyebrow">{selectedDate === today ? 'ΣΗΜΕΡΑ' : 'ΗΜΕΡΑ'}</p>
+                  <h2>{formatDate(selectedDate)}</h2>
+                </div>
+                <span className="day-total"><Trophy size={16} />{selectedDay.points}<small>πόντοι</small></span>
+              </div>
+              {dayJobs.length > 0 && (
+                <div className="day-toolbar">
+                  <div className="day-filters" role="group" aria-label="Φίλτρο τύπου εργασίας">
+                    <button type="button" className={`filter-chip${dayFilter === 'all' ? ' active' : ''}`} onClick={() => setDayFilter('all')}>Όλες ({dayJobs.length})</button>
+                    {filterOptions.map(([label, count]) => (
+                      <button type="button" key={label} className={`filter-chip${dayFilter === label ? ' active' : ''}`} onClick={() => setDayFilter(label)}>{label} ({count})</button>
+                    ))}
+                  </div>
+                  <div className="day-tools">
+                    <button type="button" className={`tool-button${searchOpen ? ' active' : ''}`} aria-label="Αναζήτηση" aria-pressed={searchOpen} onClick={() => { setSearchOpen((open) => !open); setSearchTerm(''); }}><Search size={15} /></button>
+                    <button type="button" className={`tool-button${newestFirst ? ' active' : ''}`} aria-label={newestFirst ? 'Παλαιότερες πρώτα' : 'Νεότερες πρώτα'} aria-pressed={newestFirst} onClick={() => setNewestFirst((value) => !value)}><ArrowDownUp size={15} /></button>
+                  </div>
+                </div>
+              )}
+              {searchOpen && (
+                <input className="day-search" type="search" autoFocus placeholder="Αναζήτηση εργασίας…" value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} />
+              )}
+              <div className="job-list">
+                {visibleJobs.length ? visibleJobs.map((job) => {
+                  const key = jobKey(job);
+                  const details = jobDetails[key];
+                  const isActive = key === activeJobId;
+                  const originalJob = dayJobs.find((entry) => jobKey(entry) === key) || job;
+                  const draft = drafts[key] || { categoryId: job.categoryId || '' };
+                  const isDirty = Boolean(draft.categorySelected)
+                    || draft.categoryId !== (originalJob.categoryId || '')
+                    || (draft.pointsOverride !== undefined && draft.pointsOverride !== originalJob.pointsOverride);
+                  const pickerOpen = pickerJobId === key || (!draft.categoryId && !draft.pickerClosed);
+                  return (
+                    <article className="job-row" key={key} data-job-key={key}>
+                      <div className="job-category-line">
+                        <span className={`category-marker ${job.mapped ? 'mapped' : 'unmapped'}`} />
+                        <h3>{jobLabel(job)}</h3>
+                        {job.mapped ? <span className="job-points">+{pointsLabel(job.points)}</span> : <span className="pending-label">Εκκρεμεί</span>}
+                      </div>
+                      {jobGreekLabel(job) && <p className="job-greek-label">{jobGreekLabel(job)}</p>}
+                      {pointsNote(job) && <p className="points-note">{pointsNote(job)}</p>}
+                      {editorMatchesProfile && (
+                        <>
+                          <div className="job-details-panel">
+                            {loadingJobDetails[key] ? (
+                              <p className="job-details-loading"><LoaderCircle size={14} className="spin" /> Φόρτωση στοιχείων…</p>
+                            ) : details ? (
+                              <>
+                                <div className="job-code-line">
+                                  <span className="job-code">{details.serviceOrderId}</span>
+                                  <button type="button" className={`copy-button${copiedJobId === key ? ' is-copied' : ''}`} aria-label="Αντιγραφή κωδικού" onClick={() => void copyOrderCode(key, details.serviceOrderId)}>
+                                    {copiedJobId === key ? <Check size={12} /> : <Copy size={12} />}
+                                  </button>
+                                </div>
+                                {(details.customerName || details.address) && (
+                                  <div className="job-person">
+                                    <span className="job-person-label">ΌΝΟΜΑ / ΣΥΝΔΡΟΜΗΤΗΣ</span>
+                                    {details.customerName && <strong>{details.customerName}</strong>}
+                                    {details.address && <p className="job-address"><MapPin size={12} />{details.address}</p>}
+                                  </div>
+                                )}
+                                {details.latestComment && (
+                                  <div className="job-comment">
+                                    <span className="job-comment-label"><MessageSquareText size={13} /> Τελευταίο σχόλιο</span>
+                                    <blockquote>
+                                      <p>{details.latestComment.text}</p>
+                                      {details.latestComment.at && <small>{formatDateTime(details.latestComment.at)}</small>}
+                                    </blockquote>
+                                  </div>
+                                )}
+                              </>
+                            ) : null}
+                          </div>
+                          {canEditCorrections && isActive ? (
+                            <div className="correction-controls">
+                              <div className="category-current">
+                                <span>
+                                  {isDirty ? 'Νέα επιλογή' : job.mapped && !job.correctedAt ? 'Αυτόματα' : 'Κατηγορία'}
+                                  : <strong>{categoryLabel(draft.categoryId)}</strong>
+                                  {!isDirty && job.mapped && !job.correctedAt && <Check size={12} />}
+                                </span>
+                                {draft.categoryId && (
+                                  <button type="button" className="edit-points-link" onClick={() => {
+                                    if (pickerJobId === key) scrollToJob(key);
+                                    setPickerJobId(pickerJobId === key ? '' : key);
+                                  }}>
+                                    {pickerJobId === key ? 'Κλείσιμο' : 'Αλλαγή'}
+                                  </button>
+                                )}
+                                {pickerOpen && !draft.categoryId && (
+                                  <button
+                                    type="button"
+                                    className="edit-points-link"
+                                    onClick={() => {
+                                      setPickerJobId('');
+                                      scrollToJob(key);
+                                      setDrafts((current) => ({ ...current, [key]: { ...draft, pickerClosed: true } }));
+                                    }}
+                                  >
+                                    Κλείσιμο
+                                  </button>
+                                )}
+                                {!pickerOpen && !draft.categoryId && (
+                                  <button
+                                    type="button"
+                                    className="edit-points-link"
+                                    onClick={() => {
+                                      setPickerJobId(key);
+                                      setDrafts((current) => ({ ...current, [key]: { ...draft, pickerClosed: false } }));
+                                    }}
+                                  >
+                                    Αλλαγή
+                                  </button>
+                                )}
+                              </div>
+                              {pickerOpen && (
+                                <CategoryPicker
+                                  value={draft.categoryId}
+                                  current={originalJob.categoryId}
+                                  pointsValue={job.points}
+                                  onChange={(categoryId) => {
+                                    const selectedCategory = categories.find((category) => category.id === categoryId);
+                                    setDrafts((current) => ({
+                                      ...current,
+                                      [key]: {
+                                        ...draft,
+                                        categoryId,
+                                        pointsOverride: selectedCategory?.id === 'cabling_repair' ? selectedCategory.points : null,
+                                        categorySelected: true,
+                                        pickerClosed: false,
+                                      },
+                                    }));
+                                    setPickerJobId(key);
+                                  }}
+                                  onPointsChange={(pointsOverride) => {
+                                    setDrafts((current) => ({
+                                      ...current,
+                                      [key]: { ...draft, pointsOverride, categorySelected: true, pickerClosed: false },
+                                    }));
+                                  }}
+                                />
+                              )}
+                            <div className="correction-actions">
+                              {isDirty && (
+                                <button className="cancel-correction" type="button" disabled={savingJobId === key} onClick={() => cancelCorrection(key)}>
+                                  <X size={15} />
+                                  <span>Ακύρωση</span>
+                                </button>
+                              )}
+                              <button className={`save-correction${isDirty ? ' needs-save' : ''}`} type="button" disabled={!isDirty || savingJobId === key} onClick={() => void saveCorrection(job)}>
+                                {savingJobId === key ? <RefreshCw size={15} className="spin" /> : <Save size={15} />}
+                                <span>Αποθήκευση</span>
+                              </button>
+                            </div>
+                          </div>
+                          ) : canEditCorrections ? (
+                            <div className="job-card-footer">
+                              <span>Κατηγορία: <strong>{categoryLabel(job.categoryId, job.categoryName)}</strong></span>
+                              <button type="button" className="edit-points-link" onClick={() => setEditingJobId(key)}>Επεξεργασία πόντων <Pencil size={12} /></button>
+                            </div>
+                          ) : monthLocked ? (
+                            <div className="job-card-footer">
+                              <span>Κατηγορία: <strong>{categoryLabel(job.categoryId, job.categoryName)}</strong></span>
+                              <span className="locked-job-label"><LockKeyhole size={12} /> Εγκεκριμένο</span>
+                            </div>
+                          ) : (
+                            <div className="job-card-footer">
+                              <span>Κατηγορία: <strong>{categoryLabel(job.categoryId, job.categoryName)}</strong></span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </article>
+                  );
+                }) : (
+                  <div className="no-jobs">
+                    <span className="no-jobs-mark"><CalendarDays size={18} /></span>
+                    <p>{dayJobs.length ? 'Καμία εργασία δεν ταιριάζει με τα φίλτρα.' : 'Δεν υπάρχουν εργασίες αυτή την ημέρα.'}</p>
+                  </div>
+                )}
+              </div>
+              <div className="day-panel-footer">
+                <span>Σύνολο εργασιών ημέρας: <strong>{selectedDay.jobCount}</strong></span>
+                <span>Πόντοι ημέρας: <strong className="net-points">{pointsLabel(selectedDay.points)}</strong></span>
+              </div>
+            </section>
+          </section>
+
+          <section className="monthly-summary" aria-labelledby="summary-title">
+            <div className="summary-heading">
+              <div>
+                <p className="eyebrow">ΑΝΑ ΚΑΤΗΓΟΡΙΑ</p>
+                <h2 id="summary-title">Μηνιαία σύνοψη</h2>
+              </div>
+              <div className="summary-total"><strong>{liveMonthTotal}</strong><span>πόντοι</span></div>
+            </div>
+            {liveMonthData?.categories?.length ? (
+              <div className="summary-list">
+                {[...liveMonthData.categories].sort((a, b) => b.jobCount - a.jobCount || b.points - a.points).map((entry) => {
+                  const content = (
+                    <>
+                      <span className="category-marker" />
+                      <span className="summary-category">{categoryLabel(entry.categoryId, entry.categoryName)}</span>
+                      <span className="summary-count">{entry.jobCount} {entry.jobCount === 1 ? 'εργασία' : 'εργασίες'}</span>
+                      <strong>{pointsLabel(entry.points)}</strong>
+                    </>
+                  );
+                  return entry.mapped ? (
+                    <div className="summary-row" key={entry.categoryId}>{content}</div>
+                  ) : (
+                    <button type="button" className="summary-row is-pending" key="unmapped" onClick={goToFirstPendingDay} title="Μετάβαση στην πρώτη ημέρα με εκκρεμότητα">
+                      {content}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="summary-empty">Δεν έχουν καταγραφεί εργασίες για αυτόν τον μήνα.</p>
+            )}
+            <PointsGuide />
+          </section>
+        </>
+      )}
+
+      {confirmLockOpen && selectedProfile && (
+        <ConfirmDialog
+          title={monthLocked ? 'Ξεκλείδωμα μήνα' : 'Έγκριση πληρωμής'}
+          message={monthLocked
+            ? `Μήνας: ${getMonthTitle(month)} · Συνεργείο: ${selectedProfile.teamName}. Μετά το ξεκλείδωμα οι τεχνικοί μπορούν ξανά να κάνουν διορθώσεις.`
+            : `Μήνας: ${getMonthTitle(month)} · Συνεργείο: ${selectedProfile.teamName} · Σύνολο: ${pointsLabel(liveMonthTotal)}. Μετά την έγκριση οι τεχνικοί δεν μπορούν να κάνουν διορθώσεις.`}
+          confirmLabel={monthLocked ? 'Ξεκλείδωμα' : 'Έγκριση'}
+          busy={savingMonthLock}
+          onConfirm={() => void updateMonthLock()}
+          onCancel={() => setConfirmLockOpen(false)}
+        />
+      )}
+
+      {loginOpen && selectedProfile && (
+        <Modal labelledBy="login-title" onClose={() => { if (!loginBusy) setLoginOpen(false); }}>
+          <div className="modal-heading">
+            <span className="modal-icon">{loginRole === 'admin' ? <ShieldCheck size={19} /> : <LockKeyhole size={19} />}</span>
+            <button className="icon-button close-modal" type="button" onClick={() => setLoginOpen(false)} disabled={loginBusy} aria-label="Κλείσιμο"><X size={18} /></button>
+          </div>
+          <h2 id="login-title">{loginRole === 'admin' ? 'Σύνδεση διαχειριστή' : 'Σύνδεση συνεργείου'}</h2>
+          <p>
+            {loginRole === 'admin'
+              ? 'Ο διαχειριστής βλέπει όλα τα συνεργεία, διορθώνει και εγκρίνει πληρωμές.'
+              : `${selectedProfile.storeName} · ${selectedProfile.teamName}. Αν δεν είναι το δικό σου συνεργείο, κλείσε και διάλεξέ το από τη λίστα «Συνεργείο».`}
+          </p>
+          <form onSubmit={handleLogin}>
+            <label className="password-label" htmlFor="team-password">
+              {loginRole === 'admin' ? 'Κωδικός διαχειριστή' : 'Κωδικός συνεργείου'}
+            </label>
+            <input
+              id="team-password"
+              type="password"
+              autoComplete="current-password"
+              autoFocus
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              required
+            />
+            {loginError && <p className="login-error" role="alert">{loginError}</p>}
+            <button className="login-submit" type="submit" disabled={loginBusy}>
+              {loginBusy ? <LoaderCircle size={16} className="spin" /> : <Check size={16} />} {loginBusy ? 'Σύνδεση…' : 'Σύνδεση'}
+            </button>
+          </form>
+        </Modal>
+      )}
+    </main>
+  );
+}
+
+export default App;

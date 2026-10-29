@@ -1,0 +1,13 @@
+node_modules/
+.env
+.mcp.json
+backend/.env
+backend/data/
+backend/exports/*.json
+frontend/.env
+frontend/dist/
+project-tracker/dist/
+project-tracker/test-results/
+.DS_Store
+npm-debug.log*
+.playwright-mcp/
