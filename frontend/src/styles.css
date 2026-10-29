@@ -852,6 +852,7 @@ button.done-card { width: 100%; text-align: left; font: inherit; cursor: pointer
 .closed-day-group > h3 { position: sticky; z-index: 1; top: 150px; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0; padding: 8px 2px; border-bottom: 1px solid var(--line); background: var(--bg); color: var(--text); font-size: 0.78rem; text-transform: capitalize; }
 .closed-day-group > h3 strong { color: #60a5fa; font-weight: 750; text-transform: none; }
 .closed-day-group > h3 small { flex: 0 0 auto; color: var(--muted); font-size: 0.75rem; font-weight: 500; text-transform: none; }
+.appointment-day-group > h3 { position: static; }
 .closed-day-items { display: grid; gap: 8px; }
 .done-item { gap: 5px; }
 button.done-card { align-items: stretch; gap: 8px; min-height: 44px; padding: 11px 10px; border-left-width: 4px; border-radius: 10px; background: var(--surface); transition: background-color 120ms ease, border-color 120ms ease; }

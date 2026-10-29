@@ -1,4 +1,4 @@
-import { MS_PER_DAY } from './ticketFormatters.js';
+import { athensDay, MS_PER_DAY } from './ticketFormatters.js';
 
 // Derived on the client so the state flips the moment a target passes, not at the next poll.
 export function getSlaState(ticket, now) {
@@ -26,6 +26,19 @@ export function compareTickets(a, b) {
   const bSla = b.slaDateInvalid || b.slaInherited ? Number.POSITIVE_INFINITY : time(b.slaDeadline);
   if (aSla === bSla) return time(a.createdAt) - time(b.createdAt);
   return aSla < bSla ? -1 : 1;
+}
+
+export function groupAppointmentsByDay(tickets) {
+  const groups = new Map();
+  for (const ticket of tickets) {
+    const time = ticket.scheduledFrom ? new Date(ticket.scheduledFrom).getTime() : Number.NaN;
+    const key = Number.isNaN(time) ? '' : athensDay(time);
+    if (!groups.has(key)) groups.set(key, { key, tickets: [] });
+    groups.get(key).tickets.push(ticket);
+  }
+  return [...groups.values()]
+    .sort((a, b) => a.key === '' ? 1 : b.key === '' ? -1 : a.key.localeCompare(b.key))
+    .map((group) => ({ ...group, tickets: [...group.tickets].sort(compareTickets) }));
 }
 
 export function normalizeTicketForUi(ticket) {
