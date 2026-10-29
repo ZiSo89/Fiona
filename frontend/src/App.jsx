@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './components/Icon.jsx';
 import UpdateBanner from './components/UpdateBanner.jsx';
+import StartupScreen from './components/StartupScreen.jsx';
 import CompleteView from './features/closed-tickets/CompleteView.jsx';
 import { closedDateLabel, shiftDateKey } from './features/closed-tickets/closedTicketFormat.js';
 import TicketCard from './features/tickets/TicketCard.jsx';
@@ -50,6 +51,7 @@ function App() {
   const [tickets, setTickets] = useState(() => readCachedTickets(readSelectedStore())
     || demoTickets(readSelectedStore()));
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [possiblyTruncated, setPossiblyTruncated] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -197,7 +199,10 @@ function App() {
         setLoadError(navigator.onLine === false ? 'offline' : 'server');
         console.warn('Using cached tickets because the backend is unavailable:', error.message);
       } finally {
-        if (current) setLoading(false);
+        if (current) {
+          setLoading(false);
+          setHasLoaded(true);
+        }
       }
     };
 
@@ -306,6 +311,7 @@ function App() {
   const dataAge = lastUpdated ? formatDataAge(lastUpdated, now) : null;
   return (
     <div className="app-shell" style={{ '--field-header-height': `${headerHeight}px` }}>
+      {!hasLoaded && <StartupScreen />}
       <UpdateBanner />
       {pull.distance > 0 && (
         <div className={`pull-indicator${pull.ready ? ' ready' : ''}`} style={{ height: pull.distance }} aria-hidden="true">
@@ -314,7 +320,7 @@ function App() {
       )}
       <header className="field-header" ref={headerRef}>
         <div className="brand-row">
-          <div className="brand-lockup"><img className="brand-mark" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" /><div><h1>Alpha Πληροφορική</h1><p>Εισιτήρια πεδίου Fiona</p></div></div>
+          <div className="brand-lockup"><img className="brand-mark" src={`${import.meta.env.BASE_URL}icons/fiona-192.png?v=19`} alt="" /><div><h1>Alpha Πληροφορική</h1><p>Εισιτήρια πεδίου Fiona</p></div></div>
           <div className="header-actions">
             <button className={`icon-button ${loading ? 'is-loading' : ''}`} type="button" aria-label={loading ? 'Γίνεται συγχρονισμός' : 'Συγχρονισμός εισιτηρίων'} title={loading ? 'Γίνεται συγχρονισμός' : 'Συγχρονισμός εισιτηρίων'} aria-busy={loading} disabled={loading} onClick={refresh}><Icon name="sync" /></button>
             <button className={`icon-button ${showSearch ? 'is-active' : ''}`} type="button" aria-label="Αναζήτηση" aria-pressed={showSearch} title="Αναζήτηση" onClick={() => setShowSearch((value) => !value)}><Icon name="search" /></button>
