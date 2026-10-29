@@ -659,6 +659,11 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .filter-chip span { background: transparent; color: var(--details); min-width: 0; padding: 0; }
 .filter-chip.active { background: var(--surface-raised); border-color: var(--line); color: var(--text); box-shadow: none; }
 .filter-chip.active span { background: transparent; color: var(--muted); }
+
+.service-filter-row { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 14px; }
+.service-filter-chip { display: inline-flex; min-height: 32px; align-items: center; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--text); font: inherit; font-size: 0.75rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
+.service-filter-chip.active { border-color: var(--details); background: var(--surface-raised); }
+.service-filter-chip:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .queue-heading h2 { font-size: 0.75rem; font-weight: 600; color: var(--muted); }
 .queue-heading > span { color: var(--muted); }
 .ticket-card { padding: 14px; border-radius: 12px; border-left-width: 3px; box-shadow: none; }
@@ -899,7 +904,7 @@ button.done-card:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px
 
 .truncation-warning { margin: 6px 0 0; color: var(--amber); font-size: 0.75rem; }
 
-/* Usability pass: larger touch targets, navigation, urgency and status messages. */
+/* Usability pass: larger touch targets, navigation and status messages. */
 .app-shell { padding-bottom: calc(76px + env(safe-area-inset-bottom)); }
 .filter-chip, .view-switch button, .scope-filter, .copy-all, .load-older { min-height: 44px; }
 .copy-btn { min-width: 44px; min-height: 44px; display: inline-grid; place-items: center; }
@@ -911,14 +916,6 @@ button.done-card:focus-visible { outline: 2px solid #60a5fa; outline-offset: 2px
 .bottom-nav button, .bottom-nav a { position: relative; display: flex; min-height: 52px; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: inherit; font-size: 0.75rem; font-weight: 600; text-decoration: none; cursor: pointer; }
 .bottom-nav .active { background: var(--surface-raised); color: var(--text); }
 .bottom-nav b { position: absolute; top: 4px; left: calc(50% + 8px); min-width: 20px; padding: 1px 6px; border-radius: 999px; background: var(--blue); color: #fff; font-size: 0.75rem; line-height: 1.4; }
-
-.urgent-bar { display: flex; width: 100%; align-items: center; gap: 10px; margin: 0 0 12px; padding: 12px; border: 1px solid rgba(239, 68, 68, 0.45); border-radius: 12px; background: rgba(239, 68, 68, 0.1); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
-.urgent-bar > svg { flex: 0 0 auto; color: var(--red); }
-.urgent-bar > span { display: grid; flex: 1 1 auto; gap: 2px; min-width: 0; }
-.urgent-bar strong { font-size: 0.9rem; }
-.urgent-bar small { color: var(--muted); font-size: 0.8rem; line-height: 1.35; }
-.urgent-bar em { flex: 0 0 auto; padding: 6px 10px; border-radius: 8px; background: var(--surface-raised); font-size: 0.8rem; font-style: normal; font-weight: 700; }
-.urgent-bar.active { border-color: var(--red); }
 
 .next-step { display: flex; align-items: flex-start; gap: 8px; margin: 10px 0; padding: 10px 12px; border-left: 4px solid var(--green); border-radius: 8px; background: var(--surface-raised); color: var(--text); font-size: 0.9rem; line-height: 1.35; }
 .next-step > svg { flex: 0 0 auto; margin-top: 1px; }

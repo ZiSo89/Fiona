@@ -28,29 +28,6 @@ export function compareTickets(a, b) {
   return aSla < bSla ? -1 : 1;
 }
 
-const HOUR_MS = 60 * 60 * 1000;
-
-// Overdue completion or call deadlines need action now; a call deadline within the hour needs it soon.
-export function getTicketUrgency(ticket, now) {
-  const slaOverdue = getSlaState(ticket, now).kind === 'overdue';
-  const callRemainingMs = ticket.showCallDeadline && ticket.activityDueDate
-    ? new Date(ticket.activityDueDate).getTime() - now
-    : Number.NaN;
-  const callOverdue = !Number.isNaN(callRemainingMs) && callRemainingMs <= 0;
-  const callSoon = !Number.isNaN(callRemainingMs) && callRemainingMs > 0 && callRemainingMs <= HOUR_MS;
-  return { slaOverdue, callOverdue, callSoon, urgent: slaOverdue || callOverdue || callSoon };
-}
-
-// Urgent tickets first, then the usual appointment/SLA order.
-export function compareTicketsByUrgency(now) {
-  return (a, b) => {
-    const urgentA = getTicketUrgency(a, now).urgent;
-    const urgentB = getTicketUrgency(b, now).urgent;
-    if (urgentA !== urgentB) return urgentA ? -1 : 1;
-    return compareTickets(a, b);
-  };
-}
-
 export function normalizeTicketForUi(ticket) {
   const priority = ticket?.priority ?? { normalized: null, level: null, color: null, label: null };
 
@@ -115,7 +92,6 @@ export function normalizeTicketForUi(ticket) {
     hoursRemaining: ticket?.sla?.hoursRemaining ?? ticket?.hoursRemaining ?? null,
     serviceType: ticket?.order?.type || 'Service',
     calls: ticket?.communication?.noOfCalls ?? ticket?.noOfCalls ?? 0,
-    urgencyScore: ticket?.meta?.urgencyScore ?? 0,
     lastAction: ticket?.communication?.lastAction || '',
     raw: ticket,
   };
