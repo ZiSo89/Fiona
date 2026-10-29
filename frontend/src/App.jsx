@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Icon from './components/Icon.jsx';
 import UpdateBanner from './components/UpdateBanner.jsx';
 import CompleteView from './features/closed-tickets/CompleteView.jsx';
@@ -64,6 +64,17 @@ function App() {
   const [now, setNow] = useState(() => Date.now());
   const [loggingOut, setLoggingOut] = useState(false);
   const [theme, setTheme] = useState(effectiveTheme);
+  const headerRef = useRef(null);
+  const [headerHeight, setHeaderHeight] = useState(0);
+
+  useEffect(() => {
+    const header = headerRef.current;
+    const measure = () => setHeaderHeight(header.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     // Countdowns show seconds in the last hour, so tick every second, but only while the page is visible.
@@ -294,14 +305,14 @@ function App() {
   const statusText = loading ? 'Συγχρονισμός…' : sourceMode === 'live' ? 'Ενημερωμένο' : sourceMode === 'stale' || sourceMode === 'cached' ? 'Παλιά δεδομένα' : 'Χωρίς δεδομένα';
   const dataAge = lastUpdated ? formatDataAge(lastUpdated, now) : null;
   return (
-    <div className="app-shell">
+    <div className="app-shell" style={{ '--field-header-height': `${headerHeight}px` }}>
       <UpdateBanner />
       {pull.distance > 0 && (
         <div className={`pull-indicator${pull.ready ? ' ready' : ''}`} style={{ height: pull.distance }} aria-hidden="true">
           <Icon name="sync" size={18} /><span>{pull.ready ? 'Άφησε για ανανέωση' : 'Τράβηξε για ανανέωση'}</span>
         </div>
       )}
-      <header className="field-header">
+      <header className="field-header" ref={headerRef}>
         <div className="brand-row">
           <div className="brand-lockup"><img className="brand-mark" src={`${import.meta.env.BASE_URL}icon.svg`} alt="" /><div><h1>Alpha Πληροφορική</h1><p>Εισιτήρια πεδίου Fiona</p></div></div>
           <div className="header-actions">
