@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { compareTickets, getSlaState, normalizeTicketForUi } from '../src/features/tickets/ticketModel.js';
+import { compareTickets, getSlaState, groupAppointmentsByDay, normalizeTicketForUi } from '../src/features/tickets/ticketModel.js';
 import { formatDataAge } from '../src/features/tickets/ticketFormatters.js';
 
 const now = Date.parse('2026-10-18T10:00:00.000Z');
@@ -35,6 +35,39 @@ test('sorts appointments by time first, then other tickets by SLA and creation t
     'late-sla',
     'invalid-sla',
     'no-sla',
+  ]);
+});
+
+test('groups appointments by Athens day and sorts days and appointment times', () => {
+  const tickets = [
+    { id: 'later', status: 'APPOINTMENT', scheduledFrom: '2026-10-29T10:00:00Z' },
+    { id: 'missing', status: 'APPOINTMENT', scheduledFrom: null },
+    { id: 'previous', status: 'APPOINTMENT', scheduledFrom: '2026-10-28T10:00:00Z' },
+    { id: 'midnight', status: 'APPOINTMENT', scheduledFrom: '2026-10-28T22:30:00Z' },
+    { id: 'invalid', status: 'APPOINTMENT', scheduledFrom: 'not a date' },
+  ];
+  assert.deepEqual(groupAppointmentsByDay(tickets).map((group) => ({
+    key: group.key, ids: group.tickets.map((ticket) => ticket.id),
+  })), [
+    { key: '2026-10-28', ids: ['previous'] },
+    { key: '2026-10-29', ids: ['midnight', 'later'] },
+    { key: '', ids: ['missing', 'invalid'] },
+  ]);
+  assert.equal(tickets[0].id, 'later');
+  assert.deepEqual(groupAppointmentsByDay([]), []);
+});
+
+test('groups appointments across the Athens daylight-saving transition', () => {
+  const tickets = [
+    { id: 'winter', status: 'APPOINTMENT', scheduledFrom: '2026-10-25T01:30:00Z' },
+    { id: 'summer', status: 'APPOINTMENT', scheduledFrom: '2026-10-25T00:30:00Z' },
+    { id: 'next-day', status: 'APPOINTMENT', scheduledFrom: '2026-10-25T22:30:00Z' },
+  ];
+  assert.deepEqual(groupAppointmentsByDay(tickets).map((group) => ({
+    key: group.key, ids: group.tickets.map((ticket) => ticket.id),
+  })), [
+    { key: '2026-10-25', ids: ['summer', 'winter'] },
+    { key: '2026-10-26', ids: ['next-day'] },
   ]);
 });
 

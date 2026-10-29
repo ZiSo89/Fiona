@@ -2,10 +2,11 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Icon from './components/Icon.jsx';
 import UpdateBanner from './components/UpdateBanner.jsx';
 import CompleteView from './features/closed-tickets/CompleteView.jsx';
+import { closedDateLabel, shiftDateKey } from './features/closed-tickets/closedTicketFormat.js';
 import TicketCard from './features/tickets/TicketCard.jsx';
-import { formatDataAge } from './features/tickets/ticketFormatters.js';
+import { athensDay, formatDataAge } from './features/tickets/ticketFormatters.js';
 import { fallbackTickets } from './features/tickets/fallbackTickets.js';
-import { compareTickets, normalizeTicketForUi } from './features/tickets/ticketModel.js';
+import { compareTickets, groupAppointmentsByDay, normalizeTicketForUi } from './features/tickets/ticketModel.js';
 import { filterLabel } from './features/tickets/statusLabels.js';
 import { changeMarker, readTicketChanges, trackTicketChanges } from './features/tickets/ticketChanges.js';
 import {
@@ -228,6 +229,12 @@ function App() {
     }).sort(compareTickets);
   }, [searchQuery, serviceFilter, serviceTickets]);
 
+  const appointmentGroups = useMemo(() => activeFilter === 'APPOINTMENT'
+    ? groupAppointmentsByDay(filteredTickets)
+    : [], [activeFilter, filteredTickets]);
+  const todayKey = athensDay(now);
+  const yesterdayKey = shiftDateKey(todayKey, -1);
+
   const searchSuggestions = useMemo(() => [...new Set(tickets.flatMap((ticket) => [
     ticket.serviceOrderId,
     ticket.title,
@@ -361,7 +368,21 @@ function App() {
             sourceMode === 'live' ? (searchQuery ? 'Κανένα εισιτήριο δεν ταιριάζει με την αναζήτηση ή τα φίλτρα.' : 'Δεν υπάρχουν εισιτήρια για αυτό το φίλτρο.')
               : loading ? 'Φόρτωση εισιτηρίων…' : 'Δεν υπάρχουν διαθέσιμα δεδομένα. Δοκίμασε ξανά όταν υπάρξει σύνδεση.'
           }</p>}
-          {filteredTickets.map((ticket) => <TicketCard key={`${ticket.storeId}:${ticket.id}`} ticket={ticket} now={now} showStore={storeId === 'all'} marker={changeMarker(changeItems, ticket, now)} />)}
+          {activeFilter === 'APPOINTMENT' ? appointmentGroups.map((group) => (
+            <section className="closed-day-group appointment-day-group" key={group.key || 'undated'}>
+              <h3>
+                <span>
+                  {group.key === todayKey && <strong>Σήμερα — </strong>}
+                  {group.key === yesterdayKey && <strong>Χθες — </strong>}
+                  {group.key ? closedDateLabel(`${group.key}T12:00:00Z`) : 'Χωρίς ημερομηνία ραντεβού'}
+                </span>
+                <small>{group.tickets.length} {group.tickets.length === 1 ? 'εργασία' : 'εργασίες'}</small>
+              </h3>
+              <div className="ticket-list">
+                {group.tickets.map((ticket) => <TicketCard key={`${ticket.storeId}:${ticket.id}`} ticket={ticket} now={now} showStore={storeId === 'all'} marker={changeMarker(changeItems, ticket, now)} />)}
+              </div>
+            </section>
+          )) : filteredTickets.map((ticket) => <TicketCard key={`${ticket.storeId}:${ticket.id}`} ticket={ticket} now={now} showStore={storeId === 'all'} marker={changeMarker(changeItems, ticket, now)} />)}
         </div>
       </main>}
 
