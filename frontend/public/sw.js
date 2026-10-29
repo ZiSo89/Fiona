@@ -1,12 +1,12 @@
 const APP_BASE = '/app';
-const CACHE_NAME = 'fiona-dispatch-v16';
+const CACHE_NAME = 'fiona-dispatch-v17';
 const APP_SHELL = [
   `${APP_BASE}/`,
   `${APP_BASE}/index.html`,
   `${APP_BASE}/manifest.webmanifest`,
   `${APP_BASE}/icon.svg`,
-  `${APP_BASE}/icons/fiona-192.png?v=15`,
-  `${APP_BASE}/icons/fiona-512.png?v=15`,
+  `${APP_BASE}/icons/fiona-192.png?v=16`,
+  `${APP_BASE}/icons/fiona-512.png?v=16`,
 ];
 
 self.addEventListener('install', (event) => {
